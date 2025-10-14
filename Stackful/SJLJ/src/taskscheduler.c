@@ -3,32 +3,27 @@
 
 #include "tasklist.h"
 
-enum {
-	INIT=0,
-	SCHEDULE,
-	EXIT_TASK,
+enum 
+{
+	TASK_INIT=0,
+	TASK_SCHEDULE,
+	TASK_EXIT,
 };
 
 
-struct scheduler_private {
-	/*
-	 * Where to jump back to perform scheduler actions
-	 */
+struct scheduler_data
+{
 	jmp_buf buf;
 
-	/*
-	 * The current task
-	 */
- 	struct task_list *head;
- 	
+ 	struct task_list *head; 	
  	struct task_list *current;
  	struct task_list *tail;
 
-} priv;
+} scheduler_data;
 
 void scheduler_init(void)
 {
-	priv.current = priv.head = priv.tail = NULL;
+	scheduler_data.current = scheduler_data.head = scheduler_data.tail = NULL;
 }
 
 void scheduler_create_task(void (*func)(void *), void *arg)
@@ -40,7 +35,7 @@ void scheduler_create_task(void (*func)(void *), void *arg)
 	struct task_list *list_item = init_list_item(task);
 	
 	//sc_list_insert_end(&priv.task_list, &task->task_list);
-	scheduler_insert_task_list_tail(&priv.head, list_item, &priv.tail);
+	insert_task_list_tail(&scheduler_data.head, list_item, &scheduler_data.tail);
 }
 
 void scheduler_exit_current_task(void)
@@ -48,25 +43,26 @@ void scheduler_exit_current_task(void)
 	//struct task *task = priv.current->task;
 	/* Remove so we don't schedule this again */
 //	sc_list_remove(&task->task_list);
- 	scheduler_remove_task_from_tail(&priv.head,priv.current, &priv.tail);
+ 	remove_task_tail(&scheduler_data.head,scheduler_data.current, &scheduler_data.tail);
 	/* Would love to free the task... but if we do, we won't have a
 	 * stack anymore, which would really put a damper on things.
 	 * Let's defer that until we longjmp back into the old stack */
-	longjmp(priv.buf, EXIT_TASK);
+	longjmp(scheduler_data.buf, TASK_EXIT);
 	/* NO RETURN */
 }
 
 static struct task *scheduler_choose_task(void)
 {
-	struct task_list* item = priv.head;
-	while(item)
+	// struct task_list* item = priv.head;
+	scheduler_data.current = scheduler_data.head;
+	while(scheduler_data.current)
 	{
-		if((item->task->status == ST_RUNNING) || (item->task->status == ST_CREATED)) 
+		if((scheduler_data.current->task->status == ST_RUNNING) || (scheduler_data.current->task->status == ST_CREATED)) 
 		{
-			item = scheduler_remove_task_list_head(&priv.head, &priv.tail);
-			scheduler_insert_task_list_tail(&priv.head, item, &priv.tail);
-			priv.current = item;
-			return item->task;
+			scheduler_data.current = remove_task_list_head(&scheduler_data.head, &scheduler_data.tail);
+			insert_task_list_tail(&scheduler_data.head, scheduler_data.current, &scheduler_data.tail);
+			// priv.current = item;
+			return scheduler_data.current->task;
 		}
 	}
 	return NULL;
@@ -96,36 +92,34 @@ static void schedule(void)
 
 		scheduler_exit_current_task();
 	} else {
-		longjmp(next->buf, 1);
+		longjmp(next->buf, TASK_SCHEDULE);
 	}
 
 }
 
-void scheduler_relinquish(void)
+void task_yield(void)
 {
-	if (setjmp(priv.current->task->buf)) {
+	if (setjmp(scheduler_data.current->task->buf)) {
 		return;
 	} else {
-		longjmp(priv.buf, SCHEDULE);
+		longjmp(scheduler_data.buf, TASK_SCHEDULE);
 	}
 }
 
 static void scheduler_free_current_task(void)
 {
-	free(priv.current->task->stack_bottom);
-	free(priv.current->task);
-	free(priv.current);
-	priv.current = NULL;
+	delete_task_list(&scheduler_data.current);
+	scheduler_data.current = NULL;
 }
 
 
 void scheduler_run(void)
 {
-	switch (setjmp(priv.buf)) {
-	case EXIT_TASK:
+	switch (setjmp(scheduler_data.buf)) {
+	case TASK_EXIT:
 		scheduler_free_current_task();
-	case INIT:
-	case SCHEDULE:
+	case TASK_INIT:
+	case TASK_SCHEDULE:
 		schedule();
 		return;
 	default:

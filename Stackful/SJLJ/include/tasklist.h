@@ -42,10 +42,11 @@ struct task_list {
 	struct task_list *prev;
 };
 
-void scheduler_insert_task_list_tail(struct task_list** head, struct task_list* task_item, struct task_list** tail);
-struct task_list* scheduler_remove_task_list_head(struct task_list** head, struct task_list** tail);
-void scheduler_remove_task_from_tail(struct task_list** head, struct task_list* item, struct task_list** tail);
+void insert_task_list_tail(struct task_list** head, struct task_list* task_item, struct task_list** tail);
+struct task_list* remove_task_list_head(struct task_list** head, struct task_list** tail);
+void remove_task_tail(struct task_list** head, struct task_list* item, struct task_list** tail);
 
 struct task_list * init_list_item(struct task *task);
 struct task* init_task(void (*func)(void *), void *arg);
 void init_task_stack(struct task* task);
+void delete_task_list(struct task_list** item);

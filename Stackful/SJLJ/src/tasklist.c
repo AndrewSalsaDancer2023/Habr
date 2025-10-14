@@ -37,7 +37,14 @@ void init_task_stack(struct task* task)
 	task->stack_top = task->stack_bottom + task->stack_size;
 }
 
-void scheduler_insert_task_list_tail(struct task_list** head, struct task_list* task_item, struct task_list** tail)
+void delete_task_list(struct task_list** item)
+{
+	free((*item)->task->stack_bottom);
+	free((*item)->task);
+	free(*item);
+}
+
+void insert_task_list_tail(struct task_list** head, struct task_list* task_item, struct task_list** tail)
 {
 	if(!task_item)
 		return;
@@ -46,6 +53,12 @@ void scheduler_insert_task_list_tail(struct task_list** head, struct task_list* 
 	{
 		(*tail)->next = task_item;
 		task_item->prev = *tail;
+		task_item->next = NULL;
+	}
+	else
+	{
+		task_item->next = NULL;		
+		task_item->prev = NULL;
 	}
 	*tail = task_item;
 
@@ -53,7 +66,7 @@ void scheduler_insert_task_list_tail(struct task_list** head, struct task_list* 
 		*head = task_item;
 }
 
-struct task_list* scheduler_remove_task_list_head(struct task_list** head, struct task_list** tail)
+struct task_list* remove_task_list_head(struct task_list** head, struct task_list** tail)
 {
 	struct task_list *item = NULL;
 	if(!(*head))
@@ -68,7 +81,7 @@ struct task_list* scheduler_remove_task_list_head(struct task_list** head, struc
 	return item;
 }
 
-void scheduler_remove_task_from_tail(struct task_list** head, struct task_list* item, struct task_list** tail)
+void remove_task_tail(struct task_list** head, struct task_list* item, struct task_list** tail)
 {
 	if(!item)
 		return;
@@ -79,5 +92,5 @@ void scheduler_remove_task_from_tail(struct task_list** head, struct task_list* 
 	if(*tail == item) 
   		*tail = item->prev;
 	
-	item->prev = item->next;
+	//item->prev = item->next;
 }

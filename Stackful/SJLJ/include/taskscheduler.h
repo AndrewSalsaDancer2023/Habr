@@ -24,5 +24,5 @@ void scheduler_exit_current_task(void);
 /**
  * Relinquish control for a while. Returns whenever the scheduler decides.
  */
-void scheduler_relinquish(void);
+void task_yield(void);
 
