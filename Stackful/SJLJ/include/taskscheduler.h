@@ -4,7 +4,6 @@
  * Called once initialize the scheduler.
  */
 void scheduler_init(void);
-void scheduler_destroy(void);
 /**
  * Can be called outside a task context, or within a task context, in order to
  * create a new task and add it to the list in a runnable state.

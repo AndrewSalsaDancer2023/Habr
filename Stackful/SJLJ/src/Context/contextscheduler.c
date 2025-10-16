@@ -11,8 +11,7 @@
 
 struct scheduler_data
 {
-    ucontext_t ctx_scheduler;
-	ucontext_t ctx_coro_exit;
+	struct context_continuation ctx_scheduler;
 
  	struct task_list *head; 	
  	struct task_list *current;
@@ -37,30 +36,17 @@ void scheduler_free_current_task(void)
 
 void scheduler_init(void)
 {
- 	if (getcontext(&scheduler_data.ctx_coro_exit) == -1)
-		handle_error("getcontext");
-
- 	int size = 1024;
-	void* stack = malloc(size);
-    if(!stack)
-        return;
-
-    scheduler_data.ctx_coro_exit.uc_stack.ss_sp = stack;
-    scheduler_data.ctx_coro_exit.uc_stack.ss_size = size;
-    scheduler_data.ctx_coro_exit.uc_link = &scheduler_data.ctx_scheduler;
-    makecontext(&scheduler_data.ctx_coro_exit, scheduler_free_current_task, 0);
 }
 
-void scheduler_destroy(void)
+static void task_call(struct task* task)
 {
-	free(scheduler_data.ctx_coro_exit.uc_stack.ss_sp);
+	task->func(task->arg);
+	task->status = ST_FINISHED;
 }
 
 void scheduler_create_task(void (*func)(void *), void *arg)
 {
 	struct task* task =init_task(func, arg);
-	
-	//init_task_stack(task);
     
     int size = 16 * 1024;
 	task->stack = malloc(size);
@@ -72,13 +58,12 @@ void scheduler_create_task(void (*func)(void *), void *arg)
 
 	task->continuation.ctx_func.uc_stack.ss_sp = task->stack;
     task->continuation.ctx_func.uc_stack.ss_size = size;
-    task->continuation.ctx_func.uc_link = &scheduler_data.ctx_coro_exit;
-    makecontext(&task->continuation.ctx_func, (void (*)()) task->func, 1, task->arg);
+  	task->continuation.ctx_func.uc_link = &scheduler_data.ctx_scheduler.ctx_func;
 
+	makecontext(&task->continuation.ctx_func, (void (*)()) task_call, 1, task);
 
 	struct task_list *list_item = init_list_item(task);
 	
-	//sc_list_insert_end(&priv.task_list, &task->task_list);
 	insert_task_list_tail(&scheduler_data.head, list_item, &scheduler_data.tail);
 }
 
@@ -100,7 +85,7 @@ static struct task *scheduler_choose_task(void)
 
 void task_yield(void)
 {
-	if (swapcontext(&scheduler_data.current->task->continuation.ctx_func, &scheduler_data.ctx_scheduler) == -1)
+	if (swapcontext(&scheduler_data.current->task->continuation.ctx_func, &scheduler_data.ctx_scheduler.ctx_func) == -1)
             handle_error("swapcontext");
 }
 
@@ -110,9 +95,11 @@ void scheduler_run(void)
 
 	while(next = scheduler_choose_task())
 	{
-		if (swapcontext(&scheduler_data.ctx_scheduler, &next->continuation.ctx_func) == -1)
+		if (swapcontext(&scheduler_data.ctx_scheduler.ctx_func, &next->continuation.ctx_func) == -1)
             handle_error("swapcontext");
+		
+		if(next->status == ST_FINISHED)
+			scheduler_free_current_task();
 	}
 	printf("Finished scheduler_run!\n");
-	//scheduler_destroy();
 }

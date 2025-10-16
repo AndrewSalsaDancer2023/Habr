@@ -11,6 +11,7 @@ enum task_status {
 	ST_CREATED,
 	ST_RUNNING,
 	ST_WAITING,
+	ST_FINISHED,
 };
 
 typedef void (*task_func)(void*);

@@ -146,6 +146,3 @@ void scheduler_run(void)
 	}
 	
 }
-
-void scheduler_destroy(void)
-{}
