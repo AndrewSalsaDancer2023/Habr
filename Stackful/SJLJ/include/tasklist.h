@@ -3,7 +3,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
-#include <setjmp.h>
+#include "sjlj_continuation.h"
+#include "contextcontinuation.h"
+#include "config.h"
 
 enum task_status {
 	ST_CREATED,
@@ -21,18 +23,21 @@ struct task {
 	 * For tasks in the ST_RUNNING state, this is where to longjmp back to
 	 * in order to resume their execution.
 	 */
-	jmp_buf buf;
-
+	//jmp_buf buf;
+	#ifdef USE_SETJMP
+		struct sjlj_continuation continuation;
+		void *stack_top;
+		void *stack_bottom;
+		int stack_size;
+	#else
+		struct context_continuation continuation;
+		void *stack;
+	#endif
 	/*
 	 * Function and argument to call on startup.
 	 */
  	task_func func;
 	void *arg;
-
-
-	void *stack_bottom;
-	void *stack_top;
-	int stack_size;
 };
 
 
@@ -48,5 +53,5 @@ void remove_task_tail(struct task_list** head, struct task_list* item, struct ta
 
 struct task_list * init_list_item(struct task *task);
 struct task* init_task(void (*func)(void *), void *arg);
-void init_task_stack(struct task* task);
-void delete_task_list(struct task_list** item);
+//void init_task_stack(struct task* task);
+//void delete_task_list(struct task_list** item);

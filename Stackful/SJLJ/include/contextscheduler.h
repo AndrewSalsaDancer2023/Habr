@@ -4,7 +4,7 @@
  * Called once initialize the scheduler.
  */
 void scheduler_init(void);
-void scheduler_destroy(void);
+
 /**
  * Can be called outside a task context, or within a task context, in order to
  * create a new task and add it to the list in a runnable state.
@@ -19,7 +19,7 @@ void scheduler_run(void);
 /**
  * Exit the current task.
  */
-void scheduler_exit_current_task(void);
+//void scheduler_exit_current_task(void);
 
 /**
  * Relinquish control for a while. Returns whenever the scheduler decides.

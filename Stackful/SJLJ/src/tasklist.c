@@ -27,23 +27,6 @@ struct task* init_task(void (*func)(void *), void *arg)
 	return task;
 }
 
-void init_task_stack(struct task* task)
-{
-	if(!task)
-		return;
-
-	task->stack_size = 16 * 1024;
-	task->stack_bottom = malloc(task->stack_size);
-	task->stack_top = task->stack_bottom + task->stack_size;
-}
-
-void delete_task_list(struct task_list** item)
-{
-	free((*item)->task->stack_bottom);
-	free((*item)->task);
-	free(*item);
-}
-
 void insert_task_list_tail(struct task_list** head, struct task_list* task_item, struct task_list** tail)
 {
 	if(!task_item)

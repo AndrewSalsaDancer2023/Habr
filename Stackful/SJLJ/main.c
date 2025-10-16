@@ -1,8 +1,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "taskscheduler.h"
-
+#ifdef USE_SETJMP
+	#include "taskscheduler.h"
+#else
+	#include "contextscheduler.h"
+#endif
+	
 struct tester_args {
 	char *name;
 	int iters;

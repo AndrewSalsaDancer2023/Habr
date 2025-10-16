@@ -26,6 +26,24 @@ void scheduler_init(void)
 	scheduler_data.current = scheduler_data.head = scheduler_data.tail = NULL;
 }
 
+
+void init_task_stack(struct task* task)
+{
+	if(!task)
+		return;
+
+	task->stack_size = 16 * 1024;
+	task->stack_bottom = malloc(task->stack_size);
+	task->stack_top = task->stack_bottom + task->stack_size;
+}
+
+void delete_task_list(struct task_list** item)
+{
+	free((*item)->task->stack_bottom);
+	free((*item)->task);
+	free(*item);
+}
+
 void scheduler_create_task(void (*func)(void *), void *arg)
 {
 	struct task* task =init_task(func, arg);
@@ -92,14 +110,14 @@ static void schedule(void)
 
 		scheduler_exit_current_task();
 	} else {
-		longjmp(next->buf, TASK_SCHEDULE);
+		longjmp(next->continuation.buf, TASK_SCHEDULE);
 	}
 
 }
 
 void task_yield(void)
 {
-	if (setjmp(scheduler_data.current->task->buf)) {
+	if (setjmp(scheduler_data.current->task->continuation.buf)) {
 		return;
 	} else {
 		longjmp(scheduler_data.buf, TASK_SCHEDULE);
@@ -129,3 +147,5 @@ void scheduler_run(void)
 	
 }
 
+void scheduler_destroy(void)
+{}
