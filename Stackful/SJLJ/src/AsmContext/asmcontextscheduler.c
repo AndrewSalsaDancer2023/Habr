@@ -4,10 +4,7 @@
 #include "tasklist.h"
 #include "contextscheduler.h"
 
-
-#define handle_error(msg) \
-         do { perror(msg); exit(EXIT_FAILURE); } while (0)
-
+void delete_current_task(void);
 
 struct scheduler_data
 {
@@ -19,7 +16,7 @@ struct scheduler_data
 
 } scheduler_data;
 
-extern void contextswitch(struct asm_context_continuation *old, struct asm_context_continuation *new);
+exterb void contextswitch(struct asm_context_continuation *old, struct asm_context_continuation *new);
 
 void delete_task_list(struct task_list** item)
 {
@@ -39,10 +36,10 @@ void scheduler_init(void)
 {
 }
 
-static void task_call(struct task* task)
+static void task_call()
 {
-	task->func(task->arg);
-	task->status = ST_FINISHED;
+	scheduler_data.current->task->func(scheduler_data.current->task->arg);
+	scheduler_data.current->task->status = ST_FINISHED;
 }
 
 void scheduler_create_task(void (*func)(void *), void *arg)
@@ -64,7 +61,7 @@ void scheduler_create_task(void (*func)(void *), void *arg)
 	makecontext(&task->continuation.ctx_func, (void (*)()) task_call, 1, task);
 */
 
-	*(uint64_t *)&task->stack[size -  8] = (uint64_t)scheduler_run;
+	*(uint64_t *)&task->stack[size -  8] = (uint64_t)delete_current_task;
 	*(uint64_t *)&task->stack[size - 16] = (uint64_t)task_call;
 	task->continuation.rsp = (uint64_t)&task->stack[size - 16];
 
@@ -97,6 +94,14 @@ void task_yield(void)
 	contextswitch(&scheduler_data.current->task->continuation, &scheduler_data.asm_scheduler);
 }
 
+void delete_current_task(void)
+{
+	if(scheduler_data.current->task->status == ST_FINISHED)
+		scheduler_free_current_task();
+
+	scheduler_run();
+}
+
 void scheduler_run(void)
 {
 	struct task *next = NULL;
@@ -107,8 +112,8 @@ void scheduler_run(void)
         //    handle_error("swapcontext");
 		contextswitch(&scheduler_data.asm_scheduler, &next->continuation);		
 		
-		if(next->status == ST_FINISHED)
-			scheduler_free_current_task();
+		// if(next->status == ST_FINISHED)
+		// scheduler_free_current_task();
 	}
 	printf("Finished scheduler_run!\n");
 }
