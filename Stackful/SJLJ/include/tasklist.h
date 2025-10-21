@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include "sjlj_continuation.h"
 #include "contextcontinuation.h"
+#include "asmcontextcontinuation.h"
 #include "config.h"
 
 enum task_status {
@@ -25,14 +26,17 @@ struct task {
 	 * in order to resume their execution.
 	 */
 	//jmp_buf buf;
-	#ifdef USE_SETJMP
+	#if defined(USE_SETJMP)
 		struct sjlj_continuation continuation;
 		void *stack_top;
 		void *stack_bottom;
 		int stack_size;
-	#else
+	#elif defined(USE_CONTEXT)
 		struct context_continuation continuation;
 		void *stack;
+	#elif defined(USE_ASMCONTEXT)
+		struct asm_context_continuation continuation;
+		char *stack;
 	#endif
 	/*
 	 * Function and argument to call on startup.
