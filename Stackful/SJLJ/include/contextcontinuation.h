@@ -2,7 +2,4 @@
 
 #include <ucontext.h>
 
-struct context_continuation
-{
-    ucontext_t ctx_func;
-};
+typedef ucontext_t context_continuation;

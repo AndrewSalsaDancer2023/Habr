@@ -32,11 +32,11 @@ struct task {
 		void *stack_bottom;
 		int stack_size;
 	#elif defined(USE_CONTEXT)
-		struct context_continuation continuation;
+		context_continuation continuation;
 		void *stack;
 	#elif defined(USE_ASMCONTEXT)
 		struct asm_context_continuation continuation;
-		char *stack;
+		void *stack;
 	#endif
 	/*
 	 * Function and argument to call on startup.
@@ -58,5 +58,3 @@ void remove_task_tail(struct task_list** head, struct task_list* item, struct ta
 
 struct task_list * init_list_item(struct task *task);
 struct task* init_task(void (*func)(void *), void *arg);
-//void init_task_stack(struct task* task);
-//void delete_task_list(struct task_list** item);

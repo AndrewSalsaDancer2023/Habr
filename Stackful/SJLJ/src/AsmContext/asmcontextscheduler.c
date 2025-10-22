@@ -4,11 +4,14 @@
 #include "tasklist.h"
 #include "contextscheduler.h"
 
+const int default_stack_size = 16 * 1024;
+const char* mem_alloc_message = "Invalid memory allocation";
+
 void delete_current_task(void);
 
 struct scheduler_data
 {
-	struct asm_context_continuation asm_scheduler;
+	struct asm_context_continuation scheduler_continuation;
 
  	struct task_list *head; 	
  	struct task_list *current;
@@ -16,7 +19,14 @@ struct scheduler_data
 
 } scheduler_data;
 
-exterb void contextswitch(struct asm_context_continuation *old, struct asm_context_continuation *new);
+extern void contextswitch(struct asm_context_continuation *old, struct asm_context_continuation *new);
+
+
+void exit_with_message(const char* message)
+{
+	puts(message);
+	exit(EXIT_FAILURE);
+}
 
 void delete_task_list(struct task_list** item)
 {
@@ -29,7 +39,6 @@ void scheduler_free_current_task(void)
 {
 	remove_task_tail(&scheduler_data.head, scheduler_data.current, &scheduler_data.tail);
 	delete_task_list(&scheduler_data.current);
-	scheduler_data.current = NULL;
 }
 
 void scheduler_init(void)
@@ -42,29 +51,21 @@ static void task_call()
 	scheduler_data.current->task->status = ST_FINISHED;
 }
 
+void init_task_stack(struct task* task, int stack_size)
+{
+	task->stack = malloc(stack_size);
+    if(!task->stack)
+        exit_with_message(mem_alloc_message);
+
+	*(uint64_t *)(task->stack + default_stack_size -  8) = (uint64_t)delete_current_task;
+	*(uint64_t *)(task->stack + default_stack_size - 16) = (uint64_t)task_call;
+	task->continuation.rsp = (uint64_t)(task->stack + default_stack_size - 16);
+}
+
 void scheduler_create_task(void (*func)(void *), void *arg)
 {
 	struct task* task =init_task(func, arg);
-    
-    int size = 16 * 1024;
-	task->stack = malloc(size);
-    if(!task->stack)
-        return;
-/*
-	if (getcontext(&task->continuation.ctx_func) == -1)
-		handle_error("getcontext");
-
-	task->continuation.ctx_func.uc_stack.ss_sp = task->stack;
-    task->continuation.ctx_func.uc_stack.ss_size = size;
-  	task->continuation.ctx_func.uc_link = &scheduler_data.ctx_scheduler.ctx_func;
-
-	makecontext(&task->continuation.ctx_func, (void (*)()) task_call, 1, task);
-*/
-
-	*(uint64_t *)&task->stack[size -  8] = (uint64_t)delete_current_task;
-	*(uint64_t *)&task->stack[size - 16] = (uint64_t)task_call;
-	task->continuation.rsp = (uint64_t)&task->stack[size - 16];
-
+    init_task_stack(task, default_stack_size);
 
 	struct task_list *list_item = init_list_item(task);
 	
@@ -89,9 +90,7 @@ static struct task *scheduler_choose_task(void)
 
 void task_yield(void)
 {
-//	if (swapcontext(&scheduler_data.current->task->continuation.ctx_func, &scheduler_data.ctx_scheduler.ctx_func) == -1)
-//            handle_error("swapcontext");
-	contextswitch(&scheduler_data.current->task->continuation, &scheduler_data.asm_scheduler);
+	contextswitch(&scheduler_data.current->task->continuation, &scheduler_data.scheduler_continuation);
 }
 
 void delete_current_task(void)
@@ -108,12 +107,8 @@ void scheduler_run(void)
 
 	while(next = scheduler_choose_task())
 	{
-		//if (swapcontext(&scheduler_data.ctx_scheduler.ctx_func, &next->continuation.ctx_func) == -1)
-        //    handle_error("swapcontext");
-		contextswitch(&scheduler_data.asm_scheduler, &next->continuation);		
-		
-		// if(next->status == ST_FINISHED)
-		// scheduler_free_current_task();
+		contextswitch(&scheduler_data.scheduler_continuation, &next->continuation);
 	}
+
 	printf("Finished scheduler_run!\n");
 }

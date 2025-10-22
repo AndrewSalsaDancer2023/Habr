@@ -17,12 +17,7 @@ void scheduler_create_task(void (*func)(void*), void *arg);
 void scheduler_run(void);
 
 /**
- * Exit the current task.
- */
-//void scheduler_exit_current_task(void);
-
-/**
- * Relinquish control for a while. Returns whenever the scheduler decides.
+ * yield control for a while. Returns whenever the scheduler decides.
  */
 void task_yield(void);
 
