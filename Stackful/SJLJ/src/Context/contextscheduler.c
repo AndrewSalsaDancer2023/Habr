@@ -5,8 +5,8 @@
 #include "contextscheduler.h"
 #include <ucontext.h>
 
-#define handle_error(msg) \
-         do { perror(msg); exit(EXIT_FAILURE); } while (0)
+#define handle_context_error(msg) \
+        do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
 const int default_stack_size = 16 * 1024;
 
@@ -51,7 +51,7 @@ void init_task_stack(struct task* task, int stack_size)
         return;
 
 	if (getcontext(&task->continuation) == -1)
-		handle_error("getcontext");
+		handle_context_error("getcontext");
 
 	task->continuation.uc_stack.ss_sp = task->stack;
     task->continuation.uc_stack.ss_size = stack_size;
@@ -88,7 +88,7 @@ static struct task *scheduler_choose_task(void)
 void task_yield(void)
 {
 	if (swapcontext(&scheduler_data.current->task->continuation, &scheduler_data.scheduler_continuation) == -1)
-            handle_error("swapcontext");
+    	handle_context_error("swapcontext");
 }
 
 void scheduler_run(void)
@@ -98,7 +98,7 @@ void scheduler_run(void)
 	while(next = scheduler_choose_task())
 	{
 		if (swapcontext(&scheduler_data.scheduler_continuation, &next->continuation) == -1)
-            handle_error("swapcontext");
+            handle_context_error("swapcontext");
 		
 		if(next->status == ST_FINISHED)
 			scheduler_free_current_task();

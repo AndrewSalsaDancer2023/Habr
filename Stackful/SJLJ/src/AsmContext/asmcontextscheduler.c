@@ -7,8 +7,6 @@
 const int default_stack_size = 16 * 1024;
 const char* mem_alloc_message = "Invalid memory allocation";
 
-void delete_current_task(void);
-
 struct scheduler_data
 {
 	struct asm_context_continuation scheduler_continuation;
@@ -57,7 +55,7 @@ void init_task_stack(struct task* task, int stack_size)
     if(!task->stack)
         exit_with_message(mem_alloc_message);
 
-	*(uint64_t *)(task->stack + default_stack_size -  8) = (uint64_t)delete_current_task;
+	*(uint64_t *)(task->stack + default_stack_size -  8) = (uint64_t)task_yield;
 	*(uint64_t *)(task->stack + default_stack_size - 16) = (uint64_t)task_call;
 	task->continuation.rsp = (uint64_t)(task->stack + default_stack_size - 16);
 }
@@ -93,14 +91,6 @@ void task_yield(void)
 	contextswitch(&scheduler_data.current->task->continuation, &scheduler_data.scheduler_continuation);
 }
 
-void delete_current_task(void)
-{
-	if(scheduler_data.current->task->status == ST_FINISHED)
-		scheduler_free_current_task();
-
-	scheduler_run();
-}
-
 void scheduler_run(void)
 {
 	struct task *next = NULL;
@@ -108,6 +98,8 @@ void scheduler_run(void)
 	while(next = scheduler_choose_task())
 	{
 		contextswitch(&scheduler_data.scheduler_continuation, &next->continuation);
+		if(scheduler_data.current->task->status == ST_FINISHED)
+			scheduler_free_current_task();
 	}
 
 	printf("Finished scheduler_run!\n");
