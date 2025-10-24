@@ -25,12 +25,10 @@ struct task {
 	 * For tasks in the ST_RUNNING state, this is where to longjmp back to
 	 * in order to resume their execution.
 	 */
-	//jmp_buf buf;
 	#if defined(USE_SETJMP)
-		struct sjlj_continuation continuation;
+		sjlj_continuation continuation;
 		void *stack_top;
 		void *stack_bottom;
-		int stack_size;
 	#elif defined(USE_CONTEXT)
 		context_continuation continuation;
 		void *stack;

@@ -8,6 +8,7 @@
 #define handle_context_error(msg) \
         do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
+const char* memory_alloc_error_msg = "Unable to allocate memory for stack!";
 const int default_stack_size = 16 * 1024;
 
 struct scheduler_data
@@ -48,7 +49,10 @@ void init_task_stack(struct task* task, int stack_size)
 {
 	task->stack = malloc(stack_size);
     if(!task->stack)
-        return;
+	{
+		puts(memory_alloc_error_msg);
+        exit(EXIT_FAILURE);
+	}
 
 	if (getcontext(&task->continuation) == -1)
 		handle_context_error("getcontext");

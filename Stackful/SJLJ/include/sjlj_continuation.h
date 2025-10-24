@@ -1,8 +1,4 @@
 #pragma once
 
 #include <setjmp.h>
-
-struct sjlj_continuation
-{
-    jmp_buf buf;
-};
+typedef jmp_buf sjlj_continuation;

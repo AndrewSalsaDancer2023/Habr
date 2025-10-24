@@ -10,10 +10,11 @@ enum
 	TASK_EXIT,
 };
 
+const int default_stack_size = 16 * 1024;
 
 struct scheduler_data
 {
-	jmp_buf buf;
+	sjlj_continuation continuation;
 
  	struct task_list *head; 	
  	struct task_list *current;
@@ -32,9 +33,8 @@ void init_task_stack(struct task* task)
 	if(!task)
 		return;
 
-	task->stack_size = 16 * 1024;
-	task->stack_bottom = malloc(task->stack_size);
-	task->stack_top = task->stack_bottom + task->stack_size;
+	task->stack_bottom = malloc(default_stack_size);
+	task->stack_top = task->stack_bottom + default_stack_size;
 }
 
 void delete_task_list(struct task_list** item)
@@ -65,13 +65,12 @@ void scheduler_exit_current_task(void)
 	/* Would love to free the task... but if we do, we won't have a
 	 * stack anymore, which would really put a damper on things.
 	 * Let's defer that until we longjmp back into the old stack */
-	longjmp(scheduler_data.buf, TASK_EXIT);
+	longjmp(scheduler_data.continuation, TASK_EXIT);
 	/* NO RETURN */
 }
 
 static struct task *scheduler_choose_task(void)
 {
-	// struct task_list* item = priv.head;
 	scheduler_data.current = scheduler_data.head;
 	while(scheduler_data.current)
 	{
@@ -79,7 +78,7 @@ static struct task *scheduler_choose_task(void)
 		{
 			scheduler_data.current = remove_task_list_head(&scheduler_data.head, &scheduler_data.tail);
 			insert_task_list_tail(&scheduler_data.head, scheduler_data.current, &scheduler_data.tail);
-			// priv.current = item;
+
 			return scheduler_data.current->task;
 		}
 	}
@@ -103,24 +102,23 @@ static void schedule(void)
 			: [ rs ] "+r" (top) ::
 		);
 
-
 		next->status = ST_RUNNING;
 		next->func(next->arg);
 
 
 		scheduler_exit_current_task();
 	} else {
-		longjmp(next->continuation.buf, TASK_SCHEDULE);
+		longjmp(next->continuation, TASK_SCHEDULE);
 	}
 
 }
 
 void task_yield(void)
 {
-	if (setjmp(scheduler_data.current->task->continuation.buf)) {
+	if (setjmp(scheduler_data.current->task->continuation)) {
 		return;
 	} else {
-		longjmp(scheduler_data.buf, TASK_SCHEDULE);
+		longjmp(scheduler_data.continuation, TASK_SCHEDULE);
 	}
 }
 
@@ -133,7 +131,7 @@ static void scheduler_free_current_task(void)
 
 void scheduler_run(void)
 {
-	switch (setjmp(scheduler_data.buf)) {
+	switch (setjmp(scheduler_data.continuation)) {
 	case TASK_EXIT:
 		scheduler_free_current_task();
 	case TASK_INIT:
