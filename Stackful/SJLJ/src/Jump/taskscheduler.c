@@ -51,17 +51,11 @@ void scheduler_create_task(void (*func)(void *), void *arg)
 	init_task_stack(task);
 	
 	struct task_list *list_item = init_list_item(task);
-	
-	//sc_list_insert_end(&priv.task_list, &task->task_list);
 	insert_task_list_tail(&scheduler_data.head, list_item, &scheduler_data.tail);
 }
 
 void scheduler_exit_current_task(void)
 {
-	//struct task *task = priv.current->task;
-	/* Remove so we don't schedule this again */
-//	sc_list_remove(&task->task_list);
- 	remove_task_tail(&scheduler_data.head,scheduler_data.current, &scheduler_data.tail);
 	/* Would love to free the task... but if we do, we won't have a
 	 * stack anymore, which would really put a damper on things.
 	 * Let's defer that until we longjmp back into the old stack */
@@ -85,37 +79,10 @@ static struct task *scheduler_choose_task(void)
 	return NULL;
 }
 
-static void schedule(void)
-{
-
-	struct task *next = scheduler_choose_task();
-
-	if (!next) {
-		return;
-	}
-
-	if (next->status == ST_CREATED) {
-
-		register void *top = next->stack_top;
-		__asm__ volatile(
-			"mov %[rs], %%rsp \n"
-			: [ rs ] "+r" (top) ::
-		);
-
-		next->status = ST_RUNNING;
-		next->func(next->arg);
-
-
-		scheduler_exit_current_task();
-	} else {
-		longjmp(next->continuation, TASK_SCHEDULE);
-	}
-
-}
-
 void task_yield(void)
 {
-	if (setjmp(scheduler_data.current->task->continuation)) {
+	int jmpres = setjmp(scheduler_data.current->task->continuation);
+	if (jmpres) {
 		return;
 	} else {
 		longjmp(scheduler_data.continuation, TASK_SCHEDULE);
@@ -129,18 +96,45 @@ static void scheduler_free_current_task(void)
 }
 
 
-void scheduler_run(void)
+void schedule_task(struct task *next)
 {
-	switch (setjmp(scheduler_data.continuation)) {
-	case TASK_EXIT:
-		scheduler_free_current_task();
-	case TASK_INIT:
-	case TASK_SCHEDULE:
-		schedule();
-		return;
-	default:
-		fprintf(stderr, "Scheduler error! \n");
+	if (!next) {
+		fprintf(stderr, "Invalid null task  in scheduler! \n");
 		return;
 	}
-	
+
+	if (next->status == ST_CREATED) {
+
+		register void *top = next->stack_top;
+		__asm__ volatile(
+			"mov %[rs], %%rsp \n"
+			: [ rs ] "+r" (top) ::
+		);
+
+		next->status = ST_RUNNING;
+		next->func(next->arg);
+		next->status = ST_FINISHED;
+
+		scheduler_exit_current_task();
+	} else {
+		longjmp(next->continuation, TASK_SCHEDULE);
+	}
+}
+
+
+void scheduler_run(void)
+{
+	int task_state = setjmp(scheduler_data.continuation);
+	struct task *curr = NULL;
+
+	if(scheduler_data.current && (scheduler_data.current->task->status == ST_FINISHED))
+	{
+		remove_task_tail(&scheduler_data.head,scheduler_data.current, &scheduler_data.tail);
+		scheduler_free_current_task();
+	}
+	while(curr = scheduler_choose_task())
+	{
+		schedule_task(curr);
+	}
+	printf("Finished scheduler_run!\n");
 }
