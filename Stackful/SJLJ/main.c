@@ -6,7 +6,7 @@
 #else
 	#include "contextscheduler.h"
 #endif
-	
+/*	
 struct tester_args {
 	char *name;
 	int iters;
@@ -36,6 +36,54 @@ int main(int argc, char **argv)
 	scheduler_init();
 	create_test_task("first", 5);
 	create_test_task("second", 2);
+	scheduler_run();
+	printf("Finished running all tasks!\n");
+	return EXIT_SUCCESS;
+}
+*/
+struct task 
+{
+	unsigned long a;
+	unsigned long b;	
+	unsigned long tmp;
+	unsigned long num_iters;
+	unsigned long cur_iter;
+	unsigned long  task_id;
+};
+
+void fibonacci(void* arg)
+{
+	struct task *tsk = (struct task *)arg;
+
+  	while(tsk->cur_iter < tsk->num_iters)
+	{
+		printf("fibonacci task %ld : %lu \n", tsk->task_id, tsk->a);
+		task_yield();
+
+		tsk->tmp = tsk->a;
+		tsk->a = tsk->b;
+		tsk->b = tsk->b + tsk->tmp;
+		
+		tsk->cur_iter++;
+  	}
+}  
+
+int main(int argc, char **argv)
+{
+	struct task tsk1, tsk2;
+	tsk1.a = tsk2.a = 0;
+	tsk1.b = tsk2.b = 1;  
+	tsk1.task_id = 1;
+	tsk2.task_id = 2;
+	tsk1.cur_iter = tsk2.cur_iter = 0;
+	tsk1.num_iters = 2;
+	tsk2.num_iters = 3;
+
+	scheduler_init();
+
+	scheduler_create_task(fibonacci, (void*)&tsk1);
+	scheduler_create_task(fibonacci, (void*)&tsk2);
+
 	scheduler_run();
 	printf("Finished running all tasks!\n");
 	return EXIT_SUCCESS;
