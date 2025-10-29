@@ -11,7 +11,6 @@ void some_risk_function() {
 
 int main() {
     int ret;
-    
     puts("Calling my_setjmp first time\n");
     ret = my_setjmp(env);
 

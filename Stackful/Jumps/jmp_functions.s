@@ -1,42 +1,42 @@
 .file "jmp_functions.s"
 .text
-// int my_setjmp(my_jmp_buf env);
-// Сохраняет состояние контекста в env и возвращает 0.
+// int my_setjmp(my_jmp_buf env)
+// Saves the context state to env and returns 0.
 .globl my_setjmp
 .type my_setjmp,@function
-my_setjmp:
 
-       movq %rsp, 0(%rdi)      /* Сохранить указатель стека rsp */
-       movq %rbp, 8(%rdi)      /* Сохранить указатель фрейма rbp */
-       movq %rbx, 16(%rdi)     /* Сохранить rbx (callee-saved)  */
-       movq %r12, 24(%rdi)     /* Сохранить r12 (callee-saved) */
-       movq %r13, 32(%rdi)     /* Сохранить r13 (callee-saved) */ 
-       movq %r14, 40(%rdi)     /* Сохранить r14 (callee-saved) */
-       movq %r15, 48(%rdi)     /* Сохранить r15 (callee-saved) */
-       movq (%rsp), %rcx       /* Прочитать адрес возврата */
-       movq %rcx, 56(%rdi)     /* Сохранить адрес возврата */
-       xorl %eax, %eax         /* Установить eax = 0 (возврат при первом вызове) */
+my_setjmp:
+       movq %rsp, 0x0(%rdi)      /* Save rsp */
+       movq %rbp, 0x8(%rdi)      /* Save rbp */
+       movq %rbx, 0x10(%rdi)     /* Save rbx */
+       movq %r12, 0x18(%rdi)     /* Save r12 */
+       movq %r13, 0x20(%rdi)     /* Save r13 */ 
+       movq %r14, 0x28(%rdi)     /* Save r14 */
+       movq %r15, 0x30(%rdi)     /* Save r15 */
+       movq (%rsp), %rcx       /* Read the return address to rcx */
+       movq %rcx, 0x38(%rdi)     /* Save the return address */
+       xorl %eax, %eax         /* Store eax = 0 */
        ret
 
-// void my_longjmp(my_jmp_buf env, int val);
-// Восстанавливает состояние контекста из env и передает управление,
-// возвращая val
+// void my_longjmp(my_jmp_buf env, int val)
+// Restores the context state from env and transfers control, returning val
 .globl my_longjmp
 .type my_longjmp,@function
+
 my_longjmp:
-       movq 0(%rdi), %rsp      /* Восстановить указатель стека rsp  */
-       movq 8(%rdi), %rbp      /* Восстановить указатель фрейма rbp */ 
-       movq 16(%rdi), %rbx     /* Восстановить rbx                  */
-       movq 24(%rdi), %r12     /* Восстановить r12*/
-       movq 32(%rdi), %r13     /* Восстановить r13*/
-       movq 40(%rdi), %r14     /* Восстановить r14*/
-       movq 48(%rdi), %r15     /* Восстановить r15*/
-       movq %rsi, %rax         /* Установить rax = val*/
-       testl %eax, %eax        /* Если val == 0,*/
-       jnz to_exit             /* то перейти к следующей инструкции.*/
-       incl %eax               /* Если val == 0, возвращаем 1*/
-    to_exit:
-        movq 56(%rdi), %rcx     /* Загрузить адрес возврата*/
-        pushq %rcx              /* Поместить его в стек*/
-        ret                     /* Вернуться по адресу из стека Переход к сохраненному адресу возврата*/
+       movq 0x0(%rdi), %rsp      /* Restore rsp */
+       movq 0x8(%rdi), %rbp      /* Restore rbp */ 
+       movq 0x10(%rdi), %rbx     /* Restore rbx */
+       movq 0x18(%rdi), %r12     /* Restore r12 */
+       movq 0x20(%rdi), %r13     /* Restore r13 */
+       movq 0x28(%rdi), %r14     /* Restore r14 */
+       movq 0x30(%rdi), %r15     /* Restore r15 */
+       movq %rsi, %rax         /* Set rax = val */
+       testl %eax, %eax        /* Chaeck If val == 0  */
+       jnz to_exit             /* val != 0 go to_exit */
+       incl %eax               /* Increment val */
+to_exit:
+        movq 0x38(%rdi), %rcx     /* Load return address*/
+        pushq %rcx              /* Push return address to stack */
+        ret                     /* Jump to the saved return address */
 
