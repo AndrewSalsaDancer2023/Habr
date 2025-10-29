@@ -1,22 +1,10 @@
 #pragma once
 
-/**
- * Called once initialize the scheduler.
- */
-void scheduler_init(void);
-/**
- * Can be called outside a task context, or within a task context, in order to
- * create a new task and add it to the list in a runnable state.
- */
-void scheduler_create_task(void (*func)(void*), void *arg);
+void init_scheduler(void);
 
-/**
- * Run the scheduler until all tasks are completed.
- */
-void scheduler_run(void);
+void create_task(void (*func)(void*), void *arg);
 
-/**
- * Relinquish control for a while. Returns whenever the scheduler decides.
- */
+void run_tasks(void);
+
 void task_yield(void);
 

@@ -8,12 +8,19 @@
 #include "asmcontextcontinuation.h"
 #include "config.h"
 
+extern const int default_stack_size;
+extern const char* memory_alloc_error_msg;
+extern const char* invalid_task_error_msg;
+
 enum task_status {
-	ST_CREATED,
-	ST_RUNNING,
-	ST_WAITING,
-	ST_FINISHED,
+	TASK_CREATED,
+	TASK_RUNNING,
+	TASK_WAITING,
+	TASK_FINISHED,
 };
+
+#define handle_context_error(msg) \
+        do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
 typedef void (*task_func)(void*);
 
@@ -21,38 +28,51 @@ struct task {
 	enum task_status status;
 
 	int id;
-	/*
-	 * For tasks in the ST_RUNNING state, this is where to longjmp back to
-	 * in order to resume their execution.
-	 */
 	#if defined(USE_SETJMP)
 		sjlj_continuation continuation;
 		void *stack_top;
-		void *stack_bottom;
 	#elif defined(USE_CONTEXT)
 		context_continuation continuation;
-		void *stack;
 	#elif defined(USE_ASMCONTEXT)
 		struct asm_context_continuation continuation;
-		void *stack;
 	#endif
-	/*
-	 * Function and argument to call on startup.
-	 */
+	void *stack;
  	task_func func;
 	void *arg;
 };
 
 
-struct task_list {
-	struct task_list *next;
+struct task_list_item {
+	struct task_list_item *next;
 	struct task *task;
-	struct task_list *prev;
+	struct task_list_item *prev;
 };
 
-void insert_task_list_tail(struct task_list** head, struct task_list* task_item, struct task_list** tail);
-struct task_list* remove_task_list_head(struct task_list** head, struct task_list** tail);
-void remove_task_tail(struct task_list** head, struct task_list* item, struct task_list** tail);
+struct scheduler_data
+{
+//	sjlj_continuation continuation;
+	#if defined(USE_SETJMP)
+		sjlj_continuation continuation;
+	#elif defined(USE_CONTEXT)
+		context_continuation continuation;
+	#elif defined(USE_ASMCONTEXT)
+		struct asm_context_continuation continuation;
+	#endif
 
-struct task_list * init_list_item(struct task *task);
+ 	struct task_list_item *head; 	
+ 	struct task_list_item *current;
+ 	struct task_list_item *tail;
+
+};
+
+extern struct scheduler_data scheduler_data;
+
+void insert_task_list_item_tail(struct task_list_item** head, struct task_list_item* task_item, struct task_list_item** tail);
+struct task_list_item* remove_task_list_item_head(struct task_list_item** head, struct task_list_item** tail);
+void remove_task_tail(struct task_list_item** head, struct task_list_item* item, struct task_list_item** tail);
+void delete_task_list_item(struct task_list_item** item);
+
+struct task_list_item * init_list_item(struct task *task);
 struct task* init_task(void (*func)(void *), void *arg);
+void create_task(void (*func)(void *), void *arg);
+struct task *choose_task(void);
