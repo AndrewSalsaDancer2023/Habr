@@ -1,11 +1,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#ifdef USE_SETJMP
-	#include "taskscheduler.h"
+//#ifdef USE_SETJMP
+#include "taskscheduler.h"
+/*
 #else
 	#include "contextscheduler.h"
 #endif
+*/
 /*	
 struct tester_args {
 	char *name;
@@ -41,6 +43,7 @@ int main(int argc, char **argv)
 	return EXIT_SUCCESS;
 }
 */
+/*
 struct task 
 {
 	unsigned long a;
@@ -50,34 +53,46 @@ struct task
 	unsigned long cur_iter;
 	unsigned long  task_id;
 };
+*/
+struct task 
+{
+	unsigned  num_iters;
+	unsigned  task_id;
+};
 
 void fibonacci(void* arg)
 {
+	unsigned long  Fn, Fn_2 = 0, Fn_1 = 1;
+	int i = 0;
+
 	struct task *tsk = (struct task *)arg;
-
-  	while(tsk->cur_iter < tsk->num_iters)
+	for (i = 0; i < tsk->num_iters; i++) 
 	{
-		printf("fibonacci task %ld : %lu \n", tsk->task_id, tsk->a);
+		if(i == 0)
+			Fn = Fn_2;
+		else
+			if(i == 1) 
+				Fn = Fn_1;
+			else
+			{
+				Fn = Fn_2+Fn_1;
+				Fn_2 = Fn_1;
+				Fn_1 = Fn;
+			}
+		printf("task %d: %d-th Fibonacci number is: %ld\n", tsk->task_id, i+1, Fn);
 		task_yield();
+	}
+}
 
-		tsk->tmp = tsk->a;
-		tsk->a = tsk->b;
-		tsk->b = tsk->b + tsk->tmp;
-		
-		tsk->cur_iter++;
-  	}
-}  
+struct task tsk1, tsk2;
 
 int main(int argc, char **argv)
 {
-	struct task tsk1, tsk2;
-	tsk1.a = tsk2.a = 0;
-	tsk1.b = tsk2.b = 1;  
 	tsk1.task_id = 1;
 	tsk2.task_id = 2;
-	tsk1.cur_iter = tsk2.cur_iter = 0;
+	
 	tsk1.num_iters = 2;
-	tsk2.num_iters = 3;
+	tsk2.num_iters = 7;
 
 	scheduler_init();
 

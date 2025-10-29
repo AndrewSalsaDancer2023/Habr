@@ -41,7 +41,9 @@ void scheduler_free_current_task(void)
 
 void scheduler_init(void)
 {
+	scheduler_data.current = scheduler_data.head = scheduler_data.tail = NULL;
 }
+
 
 static void task_call()
 {

@@ -7,26 +7,29 @@ enable_language(ASM)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(include)
 
-set(USE_SETJMP ON)
-#set(USE_CONTEXT ON)
-#set(USE_ASMCONTEXT ON)
+#set(USE_SETJMP OFF)
+#set(USE_CONTEXT OFF)
+set(USE_ASMCONTEXT ON)
 configure_file(config.h.in config.h)
 
 
 file(GLOB SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c)
+#file(GLOB ASM_SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/Asm/asm_function.s)
+#set(ASM_SOURCE_FILES)
 
 if(DEFINED USE_SETJMP)
    list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/Jump/taskscheduler.c)
 elseif(DEFINED USE_CONTEXT)
    list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/Context/contextscheduler.c)
 elseif(DEFINED USE_ASMCONTEXT)
-   list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/AsmContext/asmcontextscheduler.c)   
+   list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/AsmContext/asmcontextscheduler.c)
+   list(APPEND ASM_SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/Asm/asm_function.s)
 else()
    message(FATAL_ERROR "Не задани ни одна из опций USE_SETJMP, USE_CONTEXT. Заверщение сборки")
 endif()
 
 # Добавляем файлы на ассемблере
-set(ASM_SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/Asm/asm_function.s)
+#set(ASM_SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/Asm/asm_function.s)
 
 # Добавляем исполняемый файл myapp с точкой входа main.c
 add_executable(myapp main.c ${SOURCES} ${ASM_SOURCE_FILES})
