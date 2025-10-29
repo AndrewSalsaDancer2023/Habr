@@ -1,16 +1,15 @@
 #pragma once
 #include <stdint.h>
-// Определяем my_jmp_buf.
-// Нам нужно сохранить 8 64-битных регистров + указатель на код.
-// rbx, rsp, rbp, r12, r13, r14, r15, а также адрес возврата.
-// Индекс 0: rsp
-// Индекс 1: rbp
-// Индекс 2: rbx
-// Индекс 3: r12
-// Индекс 4: r13
-// Индекс 5: r14
-// Индекс 6: r15
-// Индекс 7: адрес возврата
+// We nned to save 8 64 bit egisters.
+// rbx, rsp, rbp, r12, r13, r14, r15 and return address.
+// index 0: rsp
+// index 1: rbp
+// index 2: rbx
+// index 3: r12
+// index 4: r13
+// index 5: r14
+// index 6: r15
+// index 7: return address
 typedef uint64_t my_jmp_buf[8];
 
 extern int my_setjmp(my_jmp_buf env);
