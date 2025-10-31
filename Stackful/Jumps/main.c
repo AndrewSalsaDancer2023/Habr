@@ -1,27 +1,51 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "my_setjmp.h"
-#include <stdio.h>
-my_jmp_buf env;
 
-void some_risk_function() {
-    puts("Inside risky_function\n");
-    my_longjmp(env, 5); // Back jump to the main with return value of 5
-    puts("This string never will be printed\n");
+int max_iters, i, j;
+my_jmp_buf   MainContinuation;        
+my_jmp_buf   Coro1Continuation;
+my_jmp_buf   Coro2Continuation;    
+
+void      Coro1(void);
+void      Coro2(void);
+
+void  main(int  argc, char* argv[])
+{
+     max_iters = 5;
+     if (my_setjmp(MainContinuation) == 0)
+          Coro1();
+     if (my_setjmp(MainContinuation) == 0)
+          Coro2();
+     my_longjmp(Coro1Continuation, 1);
 }
 
-int main() {
-    int ret;
-    puts("Calling my_setjmp first time\n");
-    ret = my_setjmp(env);
-
-    if (ret == 0) {
-        puts("my_setjmp returns 0, this is first time\n");
-        some_risk_function();
-    } else {
-        printf("my_setjmp returns %d from my_longjmp\n", ret);
-    }
-    
-    puts("The end\n");
-    return 0;
+void  Coro1(void)
+{
+     if (my_setjmp(Coro1Continuation) == 0) {
+          i = 1;
+          my_longjmp(MainContinuation, 1);
+     }
+     while (1) {
+          printf("Coro1 i: (%d), addr i: %p - ", i, &i);
+          i++;
+          if (my_setjmp(Coro1Continuation) == 0)
+               my_longjmp(Coro2Continuation, 1);
+     }
 }
 
+void  Coro2(void)
+{
+     if (my_setjmp(Coro2Continuation) == 0) {
+          j = 1;
+          my_longjmp(MainContinuation, 1);
+     }
+     while (1) {
+          printf("Coro2 j:(%d), addr j: %p\n", j, &j);
+          j++;
+          if (j > max_iters)
+               exit(0);
+          if (my_setjmp(Coro2Continuation) == 0)
+               my_longjmp(Coro1Continuation, 1);
+     }
+}
