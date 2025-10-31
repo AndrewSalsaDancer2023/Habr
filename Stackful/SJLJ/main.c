@@ -48,7 +48,6 @@ int main(int argc, char **argv)
 	create_task(fibonacci, (void*)&tsk2);
 
 	run_tasks();
-	printf("Finished running all tasks!\n");
 	return EXIT_SUCCESS;
 }
 

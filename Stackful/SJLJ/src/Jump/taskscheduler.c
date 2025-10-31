@@ -1,7 +1,10 @@
 #include <stdlib.h>
 #include <stdio.h>
-
 #include "tasklist.h"
+
+#if defined(CORO_USE_VALGRIND)
+# include <valgrind/valgrind.h>
+#endif
 
 const int long_jmp_value = 1;
 
@@ -20,16 +23,19 @@ void init_task_stack(struct task* task, int stack_size)
 
 	task->stack = malloc(stack_size);
 	task->stack_top = task->stack + stack_size;
+
+#if defined(CORO_USE_VALGRIND)
+    task->valgrind_id = VALGRIND_STACK_REGISTER (task->stack , task->stack_top);
+#endif
 }
 
 void task_yield(void)
 {
-	int jmpres = setjmp(scheduler_data.current->task->continuation);
-	if (jmpres) {
+	if (my_setjmp(scheduler_data.current->task->continuation)) 
 		return;
-	} else {
-		longjmp(scheduler_data.continuation, long_jmp_value);
-	}
+	else 
+		my_longjmp(scheduler_data.continuation, long_jmp_value);
+	
 }
 
 static void scheduler_free_current_task(void)
@@ -50,7 +56,7 @@ void schedule_task(struct task *next)
 	{
 		register void *top = next->stack_top;
 		__asm__ volatile(
-			"mov %[rs], %%rsp \n"
+			"movq %[rs], %%rsp \n"
 			: [ rs ] "+r" (top) ::
 		);
 
@@ -58,15 +64,16 @@ void schedule_task(struct task *next)
 		next->func(next->arg);
 		next->status = TASK_FINISHED;
 
-		longjmp(scheduler_data.continuation, long_jmp_value);
+		my_longjmp(scheduler_data.continuation, long_jmp_value);
 	} 
-	else 
-		longjmp(next->continuation, long_jmp_value);
+	else
+		if (next->status == TASK_RUNNING) 
+			my_longjmp(next->continuation, long_jmp_value);
 }
 
 void run_tasks(void)
 {
-	int task_state = setjmp(scheduler_data.continuation);
+	my_setjmp(scheduler_data.continuation);
 	struct task *curr = NULL;
 
 	if(scheduler_data.current && (scheduler_data.current->task->status == TASK_FINISHED))

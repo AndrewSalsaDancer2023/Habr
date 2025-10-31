@@ -1,5 +1,8 @@
 #include "tasklist.h"
 #include <stdlib.h>
+#if defined(CORO_USE_VALGRIND)
+# include <valgrind/valgrind.h>
+#endif
 
 const int default_stack_size = 16 * 1024;
 const char* memory_alloc_error_msg = "Unable to allocate memory for stack!";
@@ -95,6 +98,9 @@ void remove_task_tail(struct task_list_item** head, struct task_list_item* item,
 
 void delete_task_list_item(struct task_list_item** item)
 {
+#if defined(CORO_USE_VALGRIND)
+    VALGRIND_STACK_DEREGISTER ((*item)->task->valgrind_id);
+#endif
 	free((*item)->task->stack);
 	free((*item)->task);
 	free(*item);

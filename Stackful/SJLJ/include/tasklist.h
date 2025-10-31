@@ -28,17 +28,20 @@ struct task {
 	enum task_status status;
 
 	int id;
-	#if defined(USE_SETJMP)
-		sjlj_continuation continuation;
-		void *stack_top;
-	#elif defined(USE_CONTEXT)
-		context_continuation continuation;
-	#elif defined(USE_ASMCONTEXT)
-		struct asm_context_continuation continuation;
-	#endif
+#if defined(USE_SETJMP)
+	sjlj_continuation continuation;
+	void *stack_top;
+#elif defined(USE_CONTEXT)
+	context_continuation continuation;
+#elif defined(USE_ASMCONTEXT)
+	struct asm_context_continuation continuation;
+#endif
 	void *stack;
  	task_func func;
 	void *arg;
+#if defined(CORO_USE_VALGRIND)
+  	int valgrind_id;
+#endif
 };
 
 
@@ -50,7 +53,6 @@ struct task_list_item {
 
 struct scheduler_data
 {
-//	sjlj_continuation continuation;
 	#if defined(USE_SETJMP)
 		sjlj_continuation continuation;
 	#elif defined(USE_CONTEXT)
@@ -62,7 +64,6 @@ struct scheduler_data
  	struct task_list_item *head; 	
  	struct task_list_item *current;
  	struct task_list_item *tail;
-
 };
 
 extern struct scheduler_data scheduler_data;
