@@ -14,9 +14,9 @@ void  main(int  argc, char* argv[])
 {
      max_iters = 5;
      if (my_setjmp(main_continuation) == 0)
-          Coro1();
+          coro1();
      if (my_setjmp(main_continuation) == 0)
-          Coro2();
+          coro2();
      my_longjmp(coro1_continuation, 1);
 }
 
