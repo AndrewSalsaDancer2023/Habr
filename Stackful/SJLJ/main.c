@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include "taskscheduler.h"
 
-struct task 
+struct task_params 
 {
 	unsigned  num_iters;
 	unsigned  task_id;
@@ -13,7 +13,7 @@ void fibonacci(void* arg)
 	unsigned long  Fn, Fn_2 = 0, Fn_1 = 1;
 	int i = 0;
 
-	struct task *tsk = (struct task *)arg;
+	struct task_params *tsk = (struct task_params *)arg;
 	for (i = 0; i < tsk->num_iters; i++) 
 	{
 		if(i == 0)
@@ -32,7 +32,7 @@ void fibonacci(void* arg)
 	}
 }
 
-struct task tsk1, tsk2;
+struct task_params tsk1, tsk2;
 
 int main(int argc, char **argv)
 {

@@ -17,9 +17,6 @@ contextswitch:
         movq     %r12, 0x20(%rdi)
         movq     %rbx, 0x28(%rdi)
         movq     %rbp, 0x30(%rdi)
-        stmxcsr  0x38(%rdi)      /* save MMX control- and status-word */
-    	fnstcw   0x3C(%rdi)      /* save x87 control-word */
-
 
         movq     0x00(%rsi), %rsp
         movq     0x08(%rsi), %r15
@@ -28,7 +25,5 @@ contextswitch:
         movq     0x20(%rsi), %r12
         movq     0x28(%rsi), %rbx
         movq     0x30(%rsi), %rbp
-        ldmxcsr  0x38(%rsi)      /* restore MMX control- and status-word */
-        fldcw    0x3C(%rsi)      /* restore x87 control-word */
 
         ret

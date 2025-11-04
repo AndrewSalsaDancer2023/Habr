@@ -12,7 +12,8 @@ extern const int default_stack_size;
 extern const char* memory_alloc_error_msg;
 extern const char* invalid_task_error_msg;
 
-enum task_status {
+enum task_status 
+{
 	TASK_CREATED,
 	TASK_RUNNING,
 	TASK_WAITING,
@@ -24,7 +25,8 @@ enum task_status {
 
 typedef void (*task_func)(void*);
 
-struct task {
+struct task 
+{
 	enum task_status status;
 
 	int id;
@@ -45,7 +47,8 @@ struct task {
 };
 
 
-struct task_list_item {
+struct task_list_item 
+{
 	struct task_list_item *next;
 	struct task *task;
 	struct task_list_item *prev;
