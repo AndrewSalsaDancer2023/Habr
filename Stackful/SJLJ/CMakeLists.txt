@@ -7,10 +7,11 @@ enable_language(ASM)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(include)
 
-set(CORO_USE_VALGRIND ON)
-#set(USE_SETJMP ON)
+#set(CORO_USE_VALGRIND ON)
+
+set(USE_SETJMP ON)
 #set(USE_CONTEXT ON)
-set(USE_ASMCONTEXT ON)
+#set(USE_ASMCONTEXT ON)
 configure_file(config.h.in config.h)
 
 

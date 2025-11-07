@@ -47,7 +47,7 @@ void schedule_task(struct task *next)
 {
 	if (!next) 
 	{
-		fprintf(stderr, "Invalid null task  in scheduler! \n");
+		printf("Invalid task  in scheduler! \n");
 		return;
 	}
 

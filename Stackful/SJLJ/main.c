@@ -50,12 +50,3 @@ int main(int argc, char **argv)
 	run_tasks();
 	return EXIT_SUCCESS;
 }
-
-/*
-mkdir build_debug
-cd build_debug
-
-cmake -DCMAKE_BUILD_TYPE=Debug ..
-
-cmake --build .
-*/

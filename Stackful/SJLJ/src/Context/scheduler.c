@@ -3,6 +3,10 @@
 #include "tasklist.h"
 #include <ucontext.h>
 
+#if defined(CORO_USE_VALGRIND)
+# include <valgrind/valgrind.h>
+#endif
+
 void scheduler_free_current_task(void)
 {
 	remove_task_tail(&scheduler_data.head, scheduler_data.current, &scheduler_data.tail);
@@ -31,6 +35,10 @@ void init_task_stack(struct task* task, int stack_size)
 
 	if (getcontext(&task->continuation) == -1)
 		handle_context_error("getcontext");
+
+#if defined(CORO_USE_VALGRIND)
+    task->valgrind_id = VALGRIND_STACK_REGISTER (task->stack , task->stack + stack_size);
+#endif
 
 	task->continuation.uc_stack.ss_sp = task->stack;
     task->continuation.uc_stack.ss_size = stack_size;
