@@ -1,17 +1,18 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include "taskscheduler.h"
-#include "address.h"
-#include "basesocket.h"
+//#include "address.h"
+//#include "basesocket.h"
 #include <iostream>
 #include <vector>
-#include "epoller.h"
-#include "coroutine.h"
+//#include "epoller.h"
+//#include "coroutine.h"
+//#include "tasklist.h"
+#include "taskscheduler.h"
 
 size_t buffer_size = 512;
 int port = 8080;
 std::string address{"127.0.0.1"};
-
+/*
 void client_handler(EPoller& poller, RWSocket socket, int buffer_size) {
     std::vector<char> buffer(buffer_size); 
     try {
@@ -45,14 +46,14 @@ void client_handler(EPoller& poller, RWSocket socket, int buffer_size) {
 int main() {
 try {
     int numres = 15;
-    coroutine test{[numres](coroutine & self)
+    task test{[numres](task & self)
     {
         for (int i = 0; i < numres; ++i)
         {
             std::cout << "coroutine " << i << std::endl;
             self.yield();
         }
-    }};
+    }, 1};
     while(test)
     {
         std::cout << "main" << std::endl;
@@ -78,14 +79,8 @@ try {
                     client_handler(poller, std::move(client), buffer_size);
                 }
             }
-            /*if(evt.command == DescriptorOperations::Read)
-            {
-
-            }*/
         }
-        //schedule(events);
-//		auto clientSocket = sock.Accept();
-//		client_handler(clientSocket, buffer_size);
+
 	}
 }
 catch(std::exception& ex)
@@ -94,22 +89,41 @@ catch(std::exception& ex)
 }
 	return 0;
 }
+*/
 
-/*
 int main(int argc, char **argv)
 {
-	tsk1.task_id = 1;
-	tsk2.task_id = 2;
-	
-	tsk1.num_iters = 3;
-	tsk2.num_iters = 7;
-
+try {
 	init_scheduler();
 
-	create_task(fibonacci, (void*)&tsk1);
-	create_task(fibonacci, (void*)&tsk2);
+    int numres = 5;
+    create_task({[numres](task & self)
+    {
+        for (int i = 0; i < numres; ++i)
+        {
+            
+            std::cout << "coroutine " << self.get_id() << ": " << i << std::endl;
+            self.yield();
+        }
+    }});
+    
+    numres = 10;
+    create_task({[numres](task & self)
+    {
+        for (int i = 0; i < numres; ++i)
+        {
+            
+            std::cout << "coroutine " << self.get_id() << ": " << i << std::endl;
+            self.yield();
+        }
+    }});
 
 	run_tasks();
+}
+catch(std::exception& ex)
+{
+    std::cout << ex.what() << std::endl;
+}
 	return EXIT_SUCCESS;
 }
-*/
+

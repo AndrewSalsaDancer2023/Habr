@@ -22,7 +22,7 @@ list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/Socket/epoller.cpp)
 set(ASM_SOURCE_FILES)
 
 if(DEFINED USE_CONTEXT)
-    list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/Context/new_scheduler.cpp)
+    list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/Context/scheduler.cpp)
 #   list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/Context/scheduler.cpp)
 #   list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/Socket/*.cpp)   
 elseif(DEFINED USE_ASMCONTEXT)

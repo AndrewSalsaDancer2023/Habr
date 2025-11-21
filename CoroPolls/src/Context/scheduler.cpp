@@ -2,68 +2,56 @@
 #include <stdio.h>
 #include "tasklist.h"
 #include <ucontext.h>
+#include "coroutine.h"
 
 #if defined(CORO_USE_VALGRIND)
 # include <valgrind/valgrind.h>
 #endif
 
-void scheduler_free_current_task(void)
+const int default_stack_size = 16 * 1024;
+const char* memory_alloc_error_msg = "Unable to allocate memory for stack!";
+const char* invalid_task_error_msg = "Task argument must be non null!";
+
+struct scheduler_data scheduler_data;
+static int id = 1;
+
+
+void create_task(std::function<void (task &)> func)
 {
-	remove_task_tail(&scheduler_data.head, scheduler_data.current, &scheduler_data.tail);
-	delete_task_list_item(&scheduler_data.current);
+	//scheduler_data.task_list.push_back(std::move(task{func, id++}));
+	scheduler_data.task_list.emplace_back(func, id++);
 }
+
 
 void init_scheduler(void)
 {
-	scheduler_data.current = scheduler_data.head = scheduler_data.tail = NULL;
-}
-
-void task_call(void)
-{
-	scheduler_data.current->task->func(scheduler_data.current->task->arg);
-	scheduler_data.current->task->status = TASK_FINISHED;
-}
-
-extern "C" void init_task_stack(struct task* task, int stack_size)
-{
-	task->stack = malloc(stack_size);
-    if(!task->stack)
-	{
-		puts(memory_alloc_error_msg);
-        exit(EXIT_FAILURE);
-	}
-
-	if (getcontext(&task->continuation) == -1)
-		handle_context_error("getcontext");
-
-#if defined(CORO_USE_VALGRIND)
-    task->valgrind_id = VALGRIND_STACK_REGISTER (task->stack , task->stack + stack_size);
-#endif
-
-	task->continuation.uc_stack.ss_sp = task->stack;
-    task->continuation.uc_stack.ss_size = stack_size;
-  	task->continuation.uc_link = &scheduler_data.continuation;
-
-	makecontext(&task->continuation, (void (*)()) task_call, 0);
-}
-
-void task_yield(void)
-{
-	if (swapcontext(&scheduler_data.current->task->continuation, &scheduler_data.continuation) == -1)
-    	handle_context_error("swapcontext");
+	//scheduler_data.current = scheduler_data.head = scheduler_data.tail = NULL;
+	scheduler_data.curr_task = scheduler_data.task_list.end();
 }
 
 void run_tasks(void)
 {
-	struct task *next = NULL;
-
-	while(next = choose_task())
+	while(scheduler_data.task_list.size() > 0)
 	{
-		if (swapcontext(&scheduler_data.continuation, &next->continuation) == -1)
-            handle_context_error("swapcontext");
+		for(scheduler_data.curr_task = scheduler_data.task_list.begin();
+			scheduler_data.curr_task != scheduler_data.task_list.end();
+		   )
+		   {
+				if(((scheduler_data.curr_task)->get_status() != task_status::TASK_RUNNING) && ((scheduler_data.curr_task)->get_status() != task_status::TASK_CREATED))
+				{
+					scheduler_data.curr_task++;
+					continue;
+				}
+
+				(*scheduler_data.curr_task)();
+				if((scheduler_data.curr_task)->get_status() == TASK_FINISHED)
+				{
+					scheduler_data.curr_task = scheduler_data.task_list.erase(scheduler_data.curr_task);
+				}
+				else
+					scheduler_data.curr_task++;
+		   }
 		
-		if(next->status == TASK_FINISHED)
-			scheduler_free_current_task();
 	}
 	printf("Finished run_tasks!\n");
 }
