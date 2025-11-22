@@ -3,6 +3,7 @@
 #include "tasklist.h"
 #include <ucontext.h>
 #include "coroutine.h"
+#include <utility>
 
 #if defined(CORO_USE_VALGRIND)
 # include <valgrind/valgrind.h>
@@ -18,6 +19,10 @@ static int id = 1;
 
 void create_task(std::function<void (task &)> func)
 {
+/*	
+	scheduler_data.task_map.emplace(std::piecewise_construct,
+            						std::forward_as_tuple(id++),
+            						std::forward_as_tuple(func, id));*/
 	//scheduler_data.task_list.push_back(std::move(task{func, id++}));
 	scheduler_data.task_list.emplace_back(func, id++);
 }

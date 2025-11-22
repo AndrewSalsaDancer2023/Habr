@@ -43,6 +43,7 @@ struct task_list_item
 
 struct scheduler_data
 {
+	std::unordered_map<int, struct task> task_map;
 	std::list<struct task > task_list;
 	std::list<struct task >::iterator curr_task;
 };
