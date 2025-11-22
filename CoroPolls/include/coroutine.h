@@ -4,8 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <functional>
- 
- //#include <coroutine.h>
+ #include <exception> 
 #include <iostream>
  
 const size_t SIGSTKSZ = 16384;
@@ -104,7 +103,7 @@ public:
  
     void yield()
     {
-    //    status = task_status::TASK_WAITING;
+        status = task_status::TASK_WAITING;
         swapcontext(&callee, &caller);
     }
 
@@ -113,9 +112,34 @@ public:
         return status;
     }
 
+    void resume()
+    {
+        status = task_status::TASK_RUNNING;
+    }
+
     int get_id()
-    { return id; }
- 
+    { 
+        return id; 
+    }
+	void  set_exception(const std::exception_ptr& e) noexcept
+    {
+        m_exception = e;
+    }
+    const std::exception_ptr& get_exception() const noexcept
+    {
+        return m_exception;
+    }
+
+    void rethrow_exception()
+    {
+        if(!m_exception)
+            return;
+
+        std::exception_ptr e = get_exception();
+        set_exception(nullptr);
+        std::rethrow_exception(e);
+    }
+
 private:
     ucontext_t caller;
     ucontext_t callee;
@@ -123,7 +147,8 @@ private:
     std::function<void (task &)> func = nullptr;
     int id = 0;
     task_status status = task_status::TASK_CREATED;
- 
+    std::exception_ptr m_exception;
+
     static void task_call(task* pcoro)
     {
         std::cout << "inside task " << std::endl;

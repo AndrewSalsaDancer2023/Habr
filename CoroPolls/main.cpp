@@ -1,10 +1,11 @@
 #include <stdlib.h>
 #include <stdio.h>
-//#include "address.h"
-//#include "basesocket.h"
+#include "address.h"
+#include "basesocket.h"
+#include "epoller.h"
 #include <iostream>
 #include <vector>
-//#include "epoller.h"
+#include <memory>
 //#include "coroutine.h"
 //#include "tasklist.h"
 #include "taskscheduler.h"
@@ -12,6 +13,11 @@
 size_t buffer_size = 512;
 int port = 8080;
 std::string address{"127.0.0.1"};
+
+
+void client_handler(std::shared_ptr<EPoller> poller, RWSocket socket, int buffer_size)
+{
+}
 /*
 void client_handler(EPoller& poller, RWSocket socket, int buffer_size) {
     std::vector<char> buffer(buffer_size); 
@@ -93,6 +99,7 @@ catch(std::exception& ex)
 
 int main(int argc, char **argv)
 {
+/*    
 try {
 	init_scheduler();
 
@@ -124,6 +131,36 @@ catch(std::exception& ex)
 {
     std::cout << ex.what() << std::endl;
 }
+    */
+try
+{
+    std::shared_ptr<EPoller> poller = std::make_shared<EPoller>();
+    init_scheduler(poller);
+    create_task({[poller](task & self)
+    {
+        // EPoller poller;
+	    BaseServerSocket sock;
+	    sock.Bind(SocketAddress(address, port));
+	    sock.Listen();
+        
+        poller->AddAcceptEvent(sock.GetFd(), self.get_id());
+	    while(true) 
+        {
+            self.yield();
+            auto clientSockets = sock.AsyncAccept();
+            for(auto&& client : clientSockets)
+            {
+                client_handler(poller, std::move(client), buffer_size);
+            }
+        }
+    }});
+    run_tasks();
+}
+catch(const std::exception& e)
+{
+    std::cerr << e.what() << '\n';
+}
+   
 	return EXIT_SUCCESS;
 }
 

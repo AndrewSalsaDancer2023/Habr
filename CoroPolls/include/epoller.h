@@ -6,36 +6,48 @@
 #include <unordered_set>
 #include <unordered_map>
 
+const int invalid_handle = -1;
+
+// enum class DescriptorOperations
+// {
+//   Read,
+//   Write,
+//   Accept,
+//   Close,
+//   Error
+// };
+
 enum class DescriptorOperations
 {
+  Accept,
   Read,
   Write,
-  Accept,
-  Close,
   Error
 };
 
+
 struct PollResult
 {
-	int file_descriptor;
+	int coro_id;
 	DescriptorOperations command;
 };
 
 class EPoller
 {
 public:
-    EPoller();
+    EPoller(std::size_t elements = 1024);
     ~EPoller();
-    void AddAcceptEvent(int fd);
-    void AddReadEvent(int fd);
-    void AddWriteEvent(int fd);
+    void AddAcceptEvent(int fd, int coro_id);
+    void AddReadEvent(int fd, int coro_id);
+    void AddWriteEvent(int fd, int coro_id);
 	void RemoveWriteEvent(int fd);
-	std::vector<PollResult> Poll();
+	std::vector<PollResult> Poll(int timeout_milliseconds = 10);
 private:
-    int epoll_descriptor;
-    std::unordered_set<int> accept_descriptors;
-    std::unordered_map<int, epoll_event> registered_events;
-
+    int FindCoroId(int fd);
+    int epoll_descriptor = invalid_handle;
+    int accept_descriptor = invalid_handle;
+//  std::unordered_map<int, epoll_event> registered_events;
+    std::unordered_map<int, int> coro_mapping;
     std::vector<epoll_event> events_hapenned;
 };
 

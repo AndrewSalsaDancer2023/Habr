@@ -141,7 +141,8 @@ std::vector<RWSocket> BaseServerSocket::AsyncAccept()
             
         // Успешно приняли новое соединение.
         // conn_sock_fd — это новый сокет для клиента.
-        printf("Принято новое соединение на FD %d\n", conn_sock_fd);
+        //printf("Принято новое соединение на FD %d\n", conn_sock_fd);
+		std::cout << "New connection accepted on FD: %d" << conn_sock_fd << std::endl;
 		res.push_back(std::move(RWSocket(SocketAddress{reinterpret_cast<sockaddr*>(&clientaddr[0])}, conn_sock_fd)));
 	}while(hasData);
 
@@ -197,7 +198,7 @@ ssize_t RWSocket::Write(const void* buf, size_t count)
 }
 
 
-void RWSocket::AsyncWrite(const std::vector<char>& content)
+void RWSocket::AsyncWrite(const std::vector<char>& content, task& coro)
 {
 	if(content.empty())
 		return;
@@ -205,7 +206,7 @@ void RWSocket::AsyncWrite(const std::vector<char>& content)
 	size_t total_size = content.size();
 	size_t bytes_sent = 0;
 
-	size_t remaining_bytes = total_size - bytes_sent;
+	size_t remaining_bytes = total_size; //total_size - bytes_sent;
 	while(remaining_bytes > 0)
 	{
        // Попытка отправить оставшиеся данные
@@ -215,7 +216,8 @@ void RWSocket::AsyncWrite(const std::vector<char>& content)
 		{
         	// Данные были отправлены успешно (возможно, не все сразу)
         	bytes_sent += sent;
-        	printf("Отправлено %zd байт. Осталось: %zd\n", sent, total_size - bytes_sent);
+        	// printf("Отправлено %zd байт. Осталось: %zd\n", sent, total_size - bytes_sent);
+			std::cout << "Sent: " <<  sent << "remains: " << total_size - bytes_sent << std::endl;
         }
     	else 
 		if (sent == -1) 
@@ -223,14 +225,16 @@ void RWSocket::AsyncWrite(const std::vector<char>& content)
         	if (errno == EAGAIN || errno == EWOULDBLOCK) {
             	// Буфер сокета заполнился. Это НОРМАЛЬНО.
             	// Мы выходим из обработчика и ждем следующего события EPOLLOUT.
-            	printf("Буфер сокета заполнен. Ожидаем EPOLLOUT.\n");
-            	return;
+            	//printf("Буфер сокета заполнен. Ожидаем EPOLLOUT.\n");
+            	//return;
+				coro.yield();
         	} 
-		/*	else 
+			else 
 			{
-            	perror("write error");
-            	close(state->fd);
-        	}*/
+        /*    	perror("write error");
+            	close(state->fd); */
+				throw std::system_error(errno, std::generic_category(), "async wtite");
+        	}
     	}
 		remaining_bytes = total_size - bytes_sent;
 	}

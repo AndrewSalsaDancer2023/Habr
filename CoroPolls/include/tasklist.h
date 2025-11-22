@@ -8,6 +8,8 @@
 #include "config.h"
 #include <list>
 #include "coroutine.h"
+#include "epoller.h"
+#include <memory>
 
 extern const int default_stack_size;
 extern const char* memory_alloc_error_msg;
@@ -16,36 +18,12 @@ extern const char* invalid_task_error_msg;
 #define handle_context_error(msg) \
         do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
-/*typedef void (*task_func)(void*);
-
-struct task 
-{
-	enum task_status status;
-
-	int id;
-#if defined(USE_CONTEXT)
-	context_continuation continuation;
-#elif defined(USE_ASMCONTEXT)
-	struct asm_context_continuation continuation;
-#endif
-	void *stack;
- 	task_func func;
-	void *arg;
-};
-
-struct task_list_item 
-{
-	struct task_list_item *next;
-	struct task *task;
-	struct task_list_item *prev;
-};
-*/
-
 struct scheduler_data
 {
 	std::unordered_map<int, struct task> task_map;
 	std::list<struct task > task_list;
 	std::list<struct task >::iterator curr_task;
+	std::shared_ptr<EPoller> poller;
 };
 
 extern struct scheduler_data scheduler_data;
@@ -59,6 +37,6 @@ void delete_task_list_item(struct task_list_item** item);
 //struct task* init_task(void (*func)(void *), void *arg);
 //void create_task(void (*func)(void *), void *arg);
 extern "C" void create_task(std::function<void (task &)> func);
-extern "C" void init_scheduler(void);
+extern "C" void init_scheduler(std::shared_ptr<EPoller> engine);
 extern "C" void run_tasks(void);
 //struct task *choose_task(void);

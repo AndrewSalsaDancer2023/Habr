@@ -3,7 +3,6 @@
 #include <unistd.h>
 
 const int epoll_flags = EPOLL_CLOEXEC;
-const int invalid_handle = -1;
 const int max_epoll_events = 100;
 
 /*
@@ -30,14 +29,16 @@ int wait_events(int ephnd, struct epoll_event* events, int maxevents, const stru
 }
 */
 
-EPoller::EPoller()
+EPoller::EPoller(std::size_t elements)
 {
     epoll_descriptor = epoll_create1(epoll_flags);
     if (epoll_descriptor ==  invalid_handle) 
     {
         throw std::system_error(errno, std::generic_category(), "epoll_create1");
     }
+    coro_mapping.reserve(elements);
     events_hapenned.resize(max_epoll_events);
+    //registered_events.reserve(elements)
 }
 
 EPoller::~EPoller()
@@ -46,101 +47,82 @@ EPoller::~EPoller()
         ::close(epoll_descriptor);
 }
 
-void EPoller::AddAcceptEvent(int fd)
+struct epoll_event CreateReadEvent(int fd)
 {
-    auto it = registered_events.find(fd);
-    if (it != registered_events.end())
+    struct epoll_event event;
+    event.events = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLET;
+    event.data.fd = fd;
+
+    return event;
+}
+
+void EPoller::AddAcceptEvent(int fd, int coro_id)
+{
+    // struct epoll_event event;
+    // event.events = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLET;
+    // event.data.fd = fd;
+    auto event = CreateReadEvent(fd);
+    accept_descriptor = fd;
+    if(epoll_ctl(epoll_descriptor, EPOLL_CTL_ADD, fd, &event) < 0)
     {
-        (*it).second.events |= EPOLLIN;
-
-         if (epoll_ctl(epoll_descriptor, EPOLL_CTL_MOD, fd, &(*it).second) < 0)
-            throw std::system_error(errno, std::generic_category(), "epoll_ctl");
-/*                if (errno == ENOENT) {
-                    if (epoll_ctl(Fd_, EPOLL_CTL_ADD, fd, &eev) < 0) {
-                        throw std::system_error(errno, std::generic_category(), "epoll_ctl");
-                    }
-                } else {
-                    throw std::system_error(errno, std::generic_category(), "epoll_ctl");
-                }*/
+        if (errno != EEXIST)
+            throw std::system_error(errno, std::generic_category(), "epoll_ctl add accept");
     }
-    else 
-    {
-        struct epoll_event event;
-        event.events = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLET;
-        event.data.fd = fd;
-
-        if(epoll_ctl(epoll_descriptor, EPOLL_CTL_ADD, fd, &event) < 0)
-            throw std::system_error(errno, std::generic_category(), "epoll_ctl");
-
-        registered_events[fd] = event;
-        accept_descriptors.insert(fd);
-
-    }
+    coro_mapping[fd] = coro_id;
 }
 
 
-void EPoller::AddReadEvent(int fd)
+void EPoller::AddReadEvent(int fd, int coro_id)
 {
-    auto it = registered_events.find(fd);
-    if (it != registered_events.end())
-    {
-        (*it).second.events |= EPOLLIN;
+    auto event = CreateReadEvent(fd);
 
-        if (epoll_ctl(epoll_descriptor, EPOLL_CTL_MOD, fd, &(*it).second) < 0)
-            throw std::system_error(errno, std::generic_category(), "epoll_ctl");
-    }
-    else
+    if(epoll_ctl(epoll_descriptor, EPOLL_CTL_ADD, fd, &event) < 0)
     {
-        struct epoll_event event;
-        event.events = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLET;
-        event.data.fd = fd;
-
-        if(epoll_ctl(epoll_descriptor, EPOLL_CTL_ADD, fd, &event) < 0)
-            throw std::system_error(errno, std::generic_category(), "epoll_ctl");
-    
-        registered_events[fd] = event;
+        if (errno != EEXIST)
+            throw std::system_error(errno, std::generic_category(), "epoll_ctl add accept");
     }
+    coro_mapping[fd] = coro_id;
 }
 
-void EPoller::AddWriteEvent(int fd)
+struct epoll_event CreateWriteEvent(int fd)
 {
-    auto it = registered_events.find(fd);
-    if (it != registered_events.end())
-    {
-        (*it).second.events |= EPOLLOUT;
-        if (epoll_ctl(epoll_descriptor, EPOLL_CTL_MOD, fd, &(*it).second) < 0)
-            throw std::system_error(errno, std::generic_category(), "epoll_ctl");
-    }
-    else
-    {
-        struct epoll_event event;
-        event.events = EPOLLOUT | EPOLLERR | EPOLLHUP | EPOLLET;
-        event.data.fd = fd;
-    
-        if(epoll_ctl(epoll_descriptor, EPOLL_CTL_ADD, fd, &event) < 0)
-            throw std::system_error(errno, std::generic_category(), "epoll_ctl");
+    struct epoll_event event;
+    event.events = EPOLLOUT | EPOLLERR | EPOLLHUP | EPOLLET;
+    event.data.fd = fd;
 
-        registered_events[fd] = event;
+    return event;
+}
+
+void EPoller::AddWriteEvent(int fd, int coro_id)
+{
+    auto event = CreateWriteEvent(fd);
+
+    if(epoll_ctl(epoll_descriptor, EPOLL_CTL_ADD, fd, &event) < 0)
+    {
+        if (errno != EEXIST)
+            throw std::system_error(errno, std::generic_category(), "epoll_ctl add accept");
     }
+    coro_mapping[fd] = coro_id;
 }
 
 void EPoller::RemoveWriteEvent(int fd)
 {
-    auto it = registered_events.find(fd);
-    if (it != registered_events.end())
-    {
-        (*it).second.events &= ~EPOLLOUT;
-        if (epoll_ctl(epoll_descriptor, EPOLL_CTL_MOD, fd, &(*it).second) < 0)
-            throw std::system_error(errno, std::generic_category(), "epoll_ctl");
-    }
+    auto event = CreateReadEvent(fd);
+    if (epoll_ctl(epoll_descriptor, EPOLL_CTL_MOD, fd, &event) < 0)
+        throw std::system_error(errno, std::generic_category(), "epoll_ctl");
+}
+
+int EPoller::FindCoroId(int fd)
+{
+    return coro_mapping.at(fd);
 }
 
 // if (epoll_ctl(Fd_, EPOLL_CTL_DEL, fd, nullptr) < 0) 
-std::vector<PollResult> EPoller::Poll()
+std::vector<PollResult> EPoller::Poll(int timeout_milliseconds)
 {
     std::vector<PollResult> result;
     int nfds;
-    if ((nfds = epoll_wait(epoll_descriptor, &events_hapenned[0], events_hapenned.size(), 10)) < 0) 
+    if ((nfds = epoll_wait(epoll_descriptor, &events_hapenned[0], events_hapenned.size(), timeout_milliseconds)) < 0) 
     {
         if (errno == EINTR) {
             return result;
@@ -152,34 +134,36 @@ std::vector<PollResult> EPoller::Poll()
     {
         int fd = events_hapenned[i].data.fd;
         uint32_t event_flags = events_hapenned[i].events;
+        int coro_id = FindCoroId(fd);
 
         // A. Проверка на ошибки или отключение
         if (event_flags & (EPOLLERR | EPOLLHUP)) {
             // Ошибка на дескрипторе или удаленный конец закрыл соединение
-
             epoll_ctl(epoll_descriptor, EPOLL_CTL_DEL, fd, NULL); // Удаляем из epoll
             //close(fd); // Закрываем дескриптор
-            result.emplace_back(PollResult{fd, DescriptorOperations::Error});
+            coro_mapping.erase(fd);
+            result.emplace_back(PollResult{coro_id, DescriptorOperations::Error});
             continue; // Переходим к следующему событию
         }
-        else
         // B. Проверка на готовность к чтению (самое распространенное событие)
-        if (event_flags & EPOLLIN) {
+        if (event_flags & EPOLLIN) 
+        {
             // Если это серверный сокет (слушающий), значит пришло новое соединение
-            if (accept_descriptors.find(fd) != accept_descriptors.end()) {
-                result.emplace_back(PollResult{fd, DescriptorOperations::Accept});
+            if (fd == accept_descriptor) 
+            {
                 // Принять новое соединение (и добавить его в epoll_fd)
+                result.emplace_back(PollResult{coro_id, DescriptorOperations::Accept});
             } else {
-                // Если это клиентский сокет, значит можно читать данные
-                // ... Ваш код read() / recv() ...
-                result.emplace_back(PollResult{fd, DescriptorOperations::Read});
+                // Это клиентский сокет, значит можно читать данные
+                result.emplace_back(PollResult{coro_id, DescriptorOperations::Read});
             }
         }
         else
-        // C. Проверка на готовность к записи
-        if (event_flags & EPOLLOUT) {
-            // Если сокет готов принимать исходящие данные
-            result.emplace_back(PollResult{fd, DescriptorOperations::Write});
+        {
+            // C. Проверка на готовность к записи
+            if (event_flags & EPOLLOUT)
+                // Если сокет готов принимать исходящие данные
+                result.emplace_back(PollResult{coro_id, DescriptorOperations::Write});
         }
     }
 

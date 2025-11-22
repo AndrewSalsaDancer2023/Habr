@@ -10,6 +10,9 @@
 #include <utility>
 #include <vector>
 #include "address.h"
+//#include "epoller.h"
+#include "coroutine.h"
+#include <memory>
 
 class BaseSocket {
 public:
@@ -18,7 +21,7 @@ public:
 	BaseSocket(BaseSocket&& other) noexcept;
 	BaseSocket& operator=(BaseSocket&& other) noexcept;
 	~BaseSocket(){Close();}
-	int GetFd() {return file_descriptor;}
+	int GetFd() {return file_descriptor;}  
 protected:
 	int SetupNonblockingMode(int s);
 	int CreateSocket(int domain, int type);
@@ -33,7 +36,7 @@ public:
     ssize_t Read(void* buf, size_t count);
 	std::vector<char> AsyncRead(size_t buffer_size);
     ssize_t Write(const void* buf, size_t count);
-	void AsyncWrite(const std::vector<char>& data);
+	void AsyncWrite(const std::vector<char>& content, task& coro);
 protected:    
 	SocketAddress address_;
 };
