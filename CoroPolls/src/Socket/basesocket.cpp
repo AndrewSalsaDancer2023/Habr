@@ -17,12 +17,21 @@ Poller_.Poll();
 */
 BaseSocket::BaseSocket(int domain, int type)
 {
-	file_descriptor = CreateSocket(domain, type);
+	InitFileDescriptor(CreateSocket(domain, type));
 }
 
 BaseSocket::BaseSocket(int fd)
 {
-	file_descriptor = SetupNonblockingMode(fd);
+	InitFileDescriptor(SetupNonblockingMode(fd));
+}
+
+void BaseSocket::InitFileDescriptor(int s)
+{
+	fd_ptr = std::shared_ptr<int>(new int(s), [](int* fd_ptr) {
+            std::cout << "Закрытие FD: " << *fd_ptr << " через shared_ptr deleter." << std::endl;
+            close(*fd_ptr); // Вызов close() при удалении последнего shared_ptr
+            delete fd_ptr; // Освобождение памяти, выделенной под сам int*
+    });
 }
 
 int BaseSocket::SetupNonblockingMode(int s)
@@ -54,14 +63,23 @@ int BaseSocket::CreateSocket(int domain, int type)
     }
    return SetupNonblockingMode(s);
 }
-
+/*
 void BaseSocket::Close()
 {
 	if (file_descriptor >= 0) {
 		::close(file_descriptor);
     }
 }
+	*/
 
+int BaseSocket::GetFd() const
+{
+    if (fd_ptr)
+        return *fd_ptr;
+
+   	return -1;
+}
+/*
 BaseSocket& BaseSocket::operator=(BaseSocket&& other) noexcept
 {
 	if(this == &other)
@@ -77,17 +95,17 @@ BaseSocket::BaseSocket(BaseSocket&& other) noexcept
 	file_descriptor = other.file_descriptor;
 	other.file_descriptor = -1;
 }
-
+*/
 void BaseServerSocket::Bind(SocketAddress address)
 {
 	address_ = std::move(address);
 	auto [rawaddr, len] = address_.RawAddr();
     int optval = 1;
     socklen_t optlen = sizeof(optval);
-    if (setsockopt(file_descriptor, SOL_SOCKET, SO_REUSEADDR, (char*) &optval, optlen) < 0) {
+    if (setsockopt(*fd_ptr, SOL_SOCKET, SO_REUSEADDR, (char*) &optval, optlen) < 0) {
         throw std::system_error(errno, std::generic_category(), "setsockopt");
     }
-    if (bind(file_descriptor, rawaddr, len) < 0) {
+    if (bind(*fd_ptr, rawaddr, len) < 0) {
         throw std::system_error(errno, std::generic_category(), "bind");
     }
 	
@@ -95,7 +113,7 @@ void BaseServerSocket::Bind(SocketAddress address)
 
 void BaseServerSocket::Listen(int backlog)
 {
-    if (listen(file_descriptor, backlog) < 0) {
+    if (listen(*fd_ptr, backlog) < 0) {
         throw std::system_error(errno, std::generic_category(), "listen");
     }
 }
@@ -115,7 +133,7 @@ RWSocket BaseServerSocket::Accept()
    return RWSocket(SocketAddress{reinterpret_cast<sockaddr*>(&clientaddr[0])}, clientfd);
 }
 
-std::vector<RWSocket> BaseServerSocket::AsyncAccept()
+std::vector<RWSocket> BaseServerSocket::AsyncAccept() const
 {
 	std::vector<RWSocket> res;
 	bool hasData = true;
@@ -125,7 +143,7 @@ std::vector<RWSocket> BaseServerSocket::AsyncAccept()
     	socklen_t len = static_cast<socklen_t>(sizeof(sockaddr_in));
             
         // Вызываем accept() на неблокирующем сокете
-        int conn_sock_fd = ::accept(file_descriptor, reinterpret_cast<sockaddr*>(&clientaddr[0]), &len);
+        int conn_sock_fd = ::accept(*fd_ptr, reinterpret_cast<sockaddr*>(&clientaddr[0]), &len);
             
         if (conn_sock_fd == -1) 
 		{
@@ -157,16 +175,21 @@ RWSocket::RWSocket(SocketAddress address, int fd)
 
 ssize_t RWSocket::Read(void* buf, size_t count)
 {
-	return ::read(file_descriptor, buf, count); 
+	return ::read(*fd_ptr, buf, count); 
 }
 
-std::vector<char> RWSocket::AsyncRead(size_t buffer_size)
+std::string RWSocket::AsyncRead(size_t buffer_size) const
 {
-	std::vector<char> result(buffer_size);
-	size_t offset = 0;
+	//std::vector<char> result(buffer_size);
+	std::string result;
+    char buffer[256];
+    ssize_t bytes_read;
 	bool hasData = true;
+
  	do {
-        ssize_t bytes_read = ::read(file_descriptor, result.data()+offset, buffer_size);
+        //ssize_t bytes_read = ::read(*fd_ptr, result.data()+offset, buffer_size);
+		bytes_read = ::read(*fd_ptr, buffer, sizeof(buffer));
+
 
 		if (errno == EAGAIN || errno == EWOULDBLOCK) 
 			hasData = false;
@@ -177,7 +200,8 @@ std::vector<char> RWSocket::AsyncRead(size_t buffer_size)
             hasData = false;
 		else
 		{
-			if((offset + bytes_read) >= buffer_size)
+			result.append(buffer, bytes_read);
+/*			if((offset + bytes_read) >= buffer_size)
 			{
 				
 				size_t current_capacity = result.capacity();
@@ -185,7 +209,7 @@ std::vector<char> RWSocket::AsyncRead(size_t buffer_size)
 				//hasData = false; //add capacity increasing
 			}
 			else
-				offset += bytes_read;
+				offset += bytes_read;*/
 		}
 	}while(hasData);
 
@@ -194,11 +218,12 @@ std::vector<char> RWSocket::AsyncRead(size_t buffer_size)
 
 ssize_t RWSocket::Write(const void* buf, size_t count)
 {
-	return ::write(file_descriptor, buf, count);
+	return ::write(*fd_ptr, buf, count);
 }
 
 
-void RWSocket::AsyncWrite(const std::vector<char>& content, task& coro)
+//void RWSocket::AsyncWrite(const std::vector<char>& content, task& coro) const
+void RWSocket::AsyncWrite(const std::string& content, task& coro) const
 {
 	if(content.empty())
 		return;
@@ -210,7 +235,7 @@ void RWSocket::AsyncWrite(const std::vector<char>& content, task& coro)
 	while(remaining_bytes > 0)
 	{
        // Попытка отправить оставшиеся данные
-       ssize_t sent = write(file_descriptor, content.data() + bytes_sent, remaining_bytes);
+       ssize_t sent = write(*fd_ptr, content.data() + bytes_sent, remaining_bytes);
 
     	if(sent > 0) 
 		{

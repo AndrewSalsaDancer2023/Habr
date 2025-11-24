@@ -21,6 +21,19 @@ void create_task(std::function<void (task &)> func)
 	//scheduler_data.task_list.emplace_back(func, id++);
 }
 
+/*
+template<typename Func>
+void create_task(Func&& func) // Принимаем универсальной ссылкой
+{
+    scheduler_data.task_map.emplace(
+        std::piecewise_construct,
+        std::forward_as_tuple(id),
+        // Передаем func в конструктор task с использованием perfect forwarding
+        std::forward_as_tuple(std::forward<Func>(func), id) 
+    );
+    id++;
+}
+*/
 
 void init_scheduler(std::shared_ptr<EPoller> engine)
 {
