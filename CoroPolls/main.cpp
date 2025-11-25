@@ -8,14 +8,14 @@
 #include <memory>
 #include <string>
 #include <time.h>
-#include "taskscheduler.h"
+#include "scheduler.h"
 
 size_t buffer_size = 512;
 int port = 8080;
 std::string address{"127.0.0.1"};
 
 std::shared_ptr<EPoller> poller = std::make_shared<EPoller>();
-
+Scheduler scheduler(poller);
 /*
 int main() {
 try {
@@ -134,8 +134,8 @@ int main(int argc, char **argv)
 {
     try
     {
-        init_scheduler(poller);
-        create_task({[](task& self)
+        // scheduler.init_scheduler(poller);
+        scheduler.create_task({[](task& self)
         {
 	        BaseServerSocket sock;
 	        sock.Bind(SocketAddress(address, port));
@@ -149,7 +149,7 @@ int main(int argc, char **argv)
                 // for(auto&& clientsocket : clientSockets)
                 for(auto&& clientsocket : sock.AsyncAccept())
                 {
-                    create_task([clientsock = std::move(clientsocket)](task& client_coro)
+                    scheduler.create_task([clientsock = std::move(clientsocket)](task& client_coro)
                     {
                         // RWSocket othsocket = std::move(clientsocket);
                         client_handler(client_coro, clientsock, buffer_size);
@@ -157,7 +157,7 @@ int main(int argc, char **argv)
                 }
             }
         }});
-        run_tasks();
+        scheduler.run_tasks();
     }
     catch(const std::exception& e)
     {

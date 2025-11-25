@@ -117,7 +117,6 @@ int EPoller::FindCoroId(int fd)
     return coro_mapping.at(fd);
 }
 
-// if (epoll_ctl(Fd_, EPOLL_CTL_DEL, fd, nullptr) < 0) 
 std::vector<PollResult> EPoller::Poll(int timeout_milliseconds)
 {
     std::vector<PollResult> result;
@@ -142,7 +141,7 @@ std::vector<PollResult> EPoller::Poll(int timeout_milliseconds)
             epoll_ctl(epoll_descriptor, EPOLL_CTL_DEL, fd, NULL); // Удаляем из epoll
             //close(fd); // Закрываем дескриптор
             coro_mapping.erase(fd);
-            result.emplace_back(PollResult{coro_id, DescriptorOperations::Error});
+            result.emplace_back(coro_id, DescriptorOperations::Error);
             continue; // Переходим к следующему событию
         }
         // B. Проверка на готовность к чтению (самое распространенное событие)
@@ -152,10 +151,10 @@ std::vector<PollResult> EPoller::Poll(int timeout_milliseconds)
             if (fd == accept_descriptor) 
             {
                 // Принять новое соединение (и добавить его в epoll_fd)
-                result.emplace_back(PollResult{coro_id, DescriptorOperations::Accept});
+                result.emplace_back(coro_id, DescriptorOperations::Accept);
             } else {
                 // Это клиентский сокет, значит можно читать данные
-                result.emplace_back(PollResult{coro_id, DescriptorOperations::Read});
+                result.emplace_back(coro_id, DescriptorOperations::Read);
             }
         }
         else
@@ -163,80 +162,14 @@ std::vector<PollResult> EPoller::Poll(int timeout_milliseconds)
             // C. Проверка на готовность к записи
             if (event_flags & EPOLLOUT)
                 // Если сокет готов принимать исходящие данные
-                result.emplace_back(PollResult{coro_id, DescriptorOperations::Write});
+                result.emplace_back(coro_id, DescriptorOperations::Write);
         }
     }
 
     return result;
 }
+
 /*
-void EPoller::Poll(const struct timespec* ts)
-{
-	while(Ready)
-		GetReadyEvents(ts);
-}
-void EPoller::GetReadyEvents(const struct timespec* ts)
- {
-for (const auto& ch : Changes_) {
-        int fd = ch.Fd;
-        if (!ch.Handle)
-		throw std::logic_error("file descriptor handler is missed!");
-     //   auto& ev  = InEvents_[fd];
-        epoll_event eev = {};
-        eev.data.fd = fd;
-
-        if (ch.Type & TEvent::READ) {
-                eev.events |= EPOLLIN;
-//                ev.Read = ch.Handle;
-            }
-            if (ch.Type & TEvent::WRITE) {
-                eev.events |= EPOLLOUT;
-  //              ev.Write = ch.Handle;
-            }
-            if (ch.Type & TEvent::RHUP) {
-                eev.events |= EPOLLRDHUP;
-//                ev.RHup = ch.Handle;
-            }
-
-       InEvents_[fd] = ch.Handle;
-
-        if (epoll_ctl(Fd_, EPOLL_CTL_ADD, fd, &eev) < 0) {
-               throw std::system_error(errno, std::generic_category(), "epoll_ctl");
-        }
-
-    }
-    
-    Reset();
-    
-    OutEvents_.resize(std::max<size_t>(1, InEvents_.size()));
-
-    int nfds;
-    if ((nfds =  epoll_wait(Fd_, &OutEvents_[0], OutEvents_.size(), calc_timeout_milliseconds(ts))) < 0) {
-        if (errno == EINTR) {
-            return;
-        }
-        throw std::system_error(errno, std::generic_category(), "epoll_wait");
-    }
-    
-    
-    for (int i = 0; i < nfds; ++i) {
-        int fd = OutEvents_[i].data.fd;
-        auto handler = InEvents_[fd];
-        if (OutEvents_[i].events & EPOLLIN) {
-            ReadyEvents_.emplace_back(TEvent{fd, TEvent::READ, handler});
-        }
-        if (OutEvents_[i].events & EPOLLOUT) {
-            ReadyEvents_.emplace_back(TEvent{fd, TEvent::WRITE, handler});
-        }
-        if (OutEvents_[i].events & EPOLLHUP) {
-                ReadyEvents_.emplace_back(TEvent{fd, TEvent::RHUP, handler});
-        }
-        
-    }
-
-	
-}
-
 epoll_wait(epoll_fd, events, max_events, timeout)
 epoll_fd: файловый дескриптор, возвращаемый epoll_create.
 events: массив struct epoll_event, куда будут записаны произошедшие события.

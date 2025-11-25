@@ -3,7 +3,6 @@
 #include <stdexcept>
 #include <unistd.h>
 #include <utility>
-#include "io_util.h"
 #include <stdexcept>
 #include <system_error>
 
@@ -118,21 +117,6 @@ void BaseServerSocket::Listen(int backlog)
     }
 }
  
-RWSocket BaseServerSocket::Accept()
-{
-    char clientaddr[sizeof(sockaddr_in)];
-    socklen_t len = static_cast<socklen_t>(sizeof(sockaddr_in));
-    
-	int clientfd = GetAcceptedClientDescriptor(GetFd(),reinterpret_cast<sockaddr*>(&clientaddr[0]), len);
-	if (clientfd < 0) {
-		throw std::system_error(errno, std::generic_category(), "accept");
-	}
-
-//    char clientaddr[sizeof(sockaddr_in)];
-//    socklen_t len = static_cast<socklen_t>(sizeof(sockaddr_in));
-   return RWSocket(SocketAddress{reinterpret_cast<sockaddr*>(&clientaddr[0])}, clientfd);
-}
-
 std::vector<RWSocket> BaseServerSocket::AsyncAccept() const
 {
 	std::vector<RWSocket> res;
@@ -264,6 +248,15 @@ void RWSocket::AsyncWrite(const std::string& content, task& coro) const
 		remaining_bytes = total_size - bytes_sent;
 	}
 
+}
+
+void ConnectToServer(int fd, SocketAddress& address)
+{
+    auto [rawaddr, len] = address.RawAddr();
+    if (connect(fd, rawaddr, len) != 0) 
+        throw std::system_error(errno, std::generic_category(), "connect");        
+
+    // return 0;
 }
 
 void ClientSocket::Connect(SocketAddress address)

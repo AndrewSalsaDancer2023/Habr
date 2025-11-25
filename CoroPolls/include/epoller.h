@@ -17,7 +17,7 @@ const int invalid_handle = -1;
 //   Error
 // };
 
-enum class DescriptorOperations
+enum class DescriptorOperations: unsigned char
 {
   Accept,
   Read,
@@ -30,6 +30,7 @@ struct PollResult
 {
 	int coro_id;
 	DescriptorOperations command;
+    PollResult(int id, DescriptorOperations op) : coro_id(id), command(op) {}
 };
 
 class EPoller

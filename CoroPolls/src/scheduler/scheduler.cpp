@@ -1,52 +1,32 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include "tasklist.h"
+#include "scheduler.h"
 #include <ucontext.h>
 #include "coroutine.h"
 #include <utility>
 #include <stdexcept>
 
-struct scheduler_data scheduler_data;
-static int id = 1;
-
-
-void create_task(std::function<void (task &)> func)
+void Scheduler::create_task(std::function<void (task &)> func)
 {
 	
-	scheduler_data.task_map.emplace(std::piecewise_construct,
-            						std::forward_as_tuple(id),
-            						std::forward_as_tuple(func, id));
+	task_map.emplace(std::piecewise_construct,
+            		 std::forward_as_tuple(id),
+            		 std::forward_as_tuple(func, id));
 	id++;
 	//scheduler_data.task_list.push_back(std::move(task{func, id++}));
 	//scheduler_data.task_list.emplace_back(func, id++);
 }
 
-/*
-template<typename Func>
-void create_task(Func&& func) // Принимаем универсальной ссылкой
-{
-    scheduler_data.task_map.emplace(
-        std::piecewise_construct,
-        std::forward_as_tuple(id),
-        // Передаем func в конструктор task с использованием perfect forwarding
-        std::forward_as_tuple(std::forward<Func>(func), id) 
-    );
-    id++;
-}
-*/
+Scheduler::Scheduler(std::shared_ptr<EPoller> plr)
+		  :poller{plr}
+{}
 
-void init_scheduler(std::shared_ptr<EPoller> engine)
+void Scheduler::run_tasks(void)
 {
-	scheduler_data.poller = engine;
-	//scheduler_data.curr_task = scheduler_data.task_list.end();
-}
-
-void run_tasks(void)
-{
-	while(scheduler_data.task_map.size() > 0)
+	while(task_map.size() > 0)
 	{
-		for(auto curr_task = scheduler_data.task_map.begin();
-				 curr_task != scheduler_data.task_map.end();
+		for(auto curr_task = task_map.begin();
+				 curr_task != task_map.end();
 		   )
 		   {
 				if((curr_task->second.get_status() != task_status::TASK_RUNNING) && (curr_task->second.get_status() != task_status::TASK_CREATED))
@@ -58,7 +38,7 @@ void run_tasks(void)
 				curr_task->second();
 				if(curr_task->second.get_status() == TASK_FINISHED)
 				{
-					curr_task = scheduler_data.task_map.erase(curr_task);
+					curr_task = task_map.erase(curr_task);
 				}
 				else
 				{
@@ -66,11 +46,11 @@ void run_tasks(void)
 				}
 		   }
 
-		auto events = scheduler_data.poller->Poll();
+		auto events = poller->Poll();
         for(const auto& evt:events)
 		{
-			auto iter = scheduler_data.task_map.find(evt.coro_id);
-			if(iter == scheduler_data.task_map.end())
+			auto iter = task_map.find(evt.coro_id);
+			if(iter == task_map.end())
 				throw std::runtime_error("coro absent in scheduler map");
 	
 			// evt.coro_id

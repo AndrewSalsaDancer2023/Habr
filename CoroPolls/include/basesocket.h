@@ -50,7 +50,6 @@ public:
     void Bind(SocketAddress address);
     void Listen(int backlog = 128);
 
-    RWSocket Accept();
 	std::vector<RWSocket> AsyncAccept() const;
 private:
 	SocketAddress GetAddress() { return address_;}
