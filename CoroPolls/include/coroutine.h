@@ -22,7 +22,7 @@ class task
 {
 public:
   //      task(T_Func&& func_arg, int cor_id, size_t stack_size = SIGSTKSZ)
-         task(std::function<void (task &)> func_arg, int cor_id, size_t stack_size = SIGSTKSZ)
+         task(std::function<void (task &)> func_arg, uint32_t cor_id, size_t stack_size = SIGSTKSZ)
         // : stack{new unsigned char[stack_size]}, func{func}, id{cor_id}
         : stack{new unsigned char[stack_size]}, 
           func{std::move(func_arg)}, 
@@ -123,7 +123,7 @@ public:
         status = task_status::TASK_RUNNING;
     }
 
-    int get_id()
+    uint32_t get_id()
     { 
         return id; 
     }
@@ -152,7 +152,7 @@ private:
     std::unique_ptr<unsigned char[]> stack;
     std::function<void (task &)> func = nullptr;
     //T_Func func;
-    int id = 0;
+    uint32_t id = 0;
     task_status status = task_status::TASK_CREATED;
     std::exception_ptr m_exception;
 

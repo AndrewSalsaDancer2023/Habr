@@ -41,6 +41,8 @@ public:
     void AddAcceptEvent(int fd, int coro_id);
     void AddReadEvent(int fd, int coro_id);
     void AddWriteEvent(int fd, int coro_id);
+    void AppendWriteEvent(int fd, int coro_id);
+    void AppendReadEvent(int fd, int coro_id);
 	void RemoveWriteEvent(int fd);
 	std::vector<PollResult> Poll(int timeout_milliseconds = 10);
 private:

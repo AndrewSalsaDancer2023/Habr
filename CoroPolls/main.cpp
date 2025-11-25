@@ -99,7 +99,10 @@ void client_handler(task& coro, const RWSocket& socket, int buffer_size)
         while(true)
         {
             coro.yield();
-            auto input = socket.AsyncRead(buffer_size);
+            auto input = socket.AsyncRead();
+            if(input.empty())
+                return;
+            
             std::cout << "Received: " << input << std::endl;
 
             if(input == "\n")
@@ -120,7 +123,8 @@ void client_handler(task& coro, const RWSocket& socket, int buffer_size)
                     result = errorinput;
             }
             
-            poller->AddWriteEvent(socket.GetFd(), coro.get_id());
+            // poller->AddWriteEvent(socket.GetFd(), coro.get_id());
+            poller->AppendWriteEvent(socket.GetFd(), coro.get_id());
             socket.AsyncWrite(result, coro);
             poller->RemoveWriteEvent(socket.GetFd());
         }

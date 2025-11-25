@@ -71,6 +71,22 @@ void EPoller::AddAcceptEvent(int fd, int coro_id)
     coro_mapping[fd] = coro_id;
 }
 
+struct epoll_event SetFullEventMask(int fd)
+{
+    struct epoll_event event;
+    event.events = EPOLLOUT | EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLET;
+    event.data.fd = fd;
+
+    return event;
+}
+
+void EPoller::AppendReadEvent(int fd, int coro_id)
+{
+    auto event = SetFullEventMask(fd);   
+    if (epoll_ctl(epoll_descriptor, EPOLL_CTL_MOD, fd, &event) < 0)
+        throw std::system_error(errno, std::generic_category(), "epoll_ctl"); 
+}
+
 
 void EPoller::AddReadEvent(int fd, int coro_id)
 {
@@ -91,6 +107,13 @@ struct epoll_event CreateWriteEvent(int fd)
     event.data.fd = fd;
 
     return event;
+}
+
+void EPoller::AppendWriteEvent(int fd, int coro_id)
+{
+    auto event = SetFullEventMask(fd);   
+    if (epoll_ctl(epoll_descriptor, EPOLL_CTL_MOD, fd, &event) < 0)
+        throw std::system_error(errno, std::generic_category(), "epoll_ctl"); 
 }
 
 void EPoller::AddWriteEvent(int fd, int coro_id)
