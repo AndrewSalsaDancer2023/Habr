@@ -10,60 +10,15 @@
 #include <time.h>
 #include "scheduler.h"
 
+#include "utils.h"
+
 size_t buffer_size = 512;
 int port = 8080;
 std::string address{"127.0.0.1"};
 
 std::shared_ptr<EPoller> poller = std::make_shared<EPoller>();
 Scheduler scheduler(poller);
-/*
-int main() {
-try {
-    int numres = 15;
-    task test{[numres](task & self)
-    {
-        for (int i = 0; i < numres; ++i)
-        {
-            std::cout << "coroutine " << i << std::endl;
-            self.yield();
-        }
-    }, 1};
-    while(test)
-    {
-        std::cout << "main" << std::endl;
-        test();
-    }
-    return 0;
 
-    EPoller poller;
-	BaseServerSocket sock;
-	sock.Bind(SocketAddress(address, port));
-	sock.Listen();
-    poller.AddAcceptEvent(sock.GetFd());
-	while(true) 
-    {
-        auto events = poller.Poll();
-        for(const auto& evt:events) 
-        {
-            if(evt.command == DescriptorOperations::Accept)
-            {
-                auto clientSockets = sock.AsyncAccept();
-                for(auto&& client : clientSockets)
-                {
-                    client_handler(poller, std::move(client), buffer_size);
-                }
-            }
-        }
-
-	}
-}
-catch(std::exception& ex)
-{
-    std::cout << ex.what() << std::endl;
-}
-	return 0;
-}
-*/
 const std::string echocommand = "echo:";
 const std::string timecommand = "time";
 const std::string errorinput = "invalid command";
@@ -91,7 +46,7 @@ std::string GetTimeString()
     return std::string(ctime(&current_time));
 }
 
-void client_handler(task& coro, const RWSocket& socket, int buffer_size) 
+void client_handler(task& coro, const RWSocket& socket) 
 {
     try 
     {
@@ -126,7 +81,7 @@ void client_handler(task& coro, const RWSocket& socket, int buffer_size)
             // poller->AddWriteEvent(socket.GetFd(), coro.get_id());
             poller->AppendWriteEvent(socket.GetFd(), coro.get_id());
             socket.AsyncWrite(result, coro);
-            poller->RemoveWriteEvent(socket.GetFd());
+            poller->RemoveWriteEvent(socket.GetFd(), coro.get_id());
         }
     } catch (const std::exception& ex) {
         std::cerr << "Exception: " << ex.what() << std::endl;
@@ -136,19 +91,26 @@ void client_handler(task& coro, const RWSocket& socket, int buffer_size)
 
 int main(int argc, char **argv)
 {
+ /*   uint32_t my_id = 12345; 
+    int my_fd = 42;             
+    uint64_t packed_value = pack_id_fd(my_id, my_fd);
+    auto [id, fd] = unpack_id_fd(packed_value);
+    std::cout << id << std::endl;
+    std::cout << fd << std::endl;
+    return 0;*/
     try
     {
         // scheduler.init_scheduler(poller);
-        scheduler.create_task({[](task& self)
+        scheduler.create_task({[](task& accepttask)
         {
 	        BaseServerSocket sock;
 	        sock.Bind(SocketAddress(address, port));
 	        sock.Listen();
         
-            poller->AddAcceptEvent(sock.GetFd(), self.get_id());
+            poller->AddAcceptEvent(sock.GetFd(), accepttask.get_id());
 	        while(true) 
             {
-                self.yield();
+                accepttask.yield();
                 // auto clientSockets = sock.AsyncAccept();
                 // for(auto&& clientsocket : clientSockets)
                 for(auto&& clientsocket : sock.AsyncAccept())
@@ -156,7 +118,7 @@ int main(int argc, char **argv)
                     scheduler.create_task([clientsock = std::move(clientsocket)](task& client_coro)
                     {
                         // RWSocket othsocket = std::move(clientsocket);
-                        client_handler(client_coro, clientsock, buffer_size);
+                        client_handler(client_coro, clientsock);
                     });
                 }
             }

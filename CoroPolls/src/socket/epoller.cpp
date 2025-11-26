@@ -1,33 +1,10 @@
 #include "epoller.h"
 #include <system_error>
 #include <unistd.h>
+#include "utils.h"
 
 const int epoll_flags = EPOLL_CLOEXEC;
 const int max_epoll_events = 100;
-
-/*
-int calc_timeout_milliseconds(const struct timespec* ts = nullptr)
-{
-	int timeout = 0;
-	if(!ts)
-	return timeout;
-	
-	timeout  = ts->tv_sec * 1000;
-    	timeout += ts->tv_nsec / 1000000;
-        
-    return timeout;
-}
-
-int wait_events(int ephnd, struct epoll_event* events, int maxevents, const struct timespec* ts) {
-    int timeout = 0;
-    if (ts) {
-        timeout  = ts->tv_sec;
-        timeout += ts->tv_nsec / 1000000;
-    }
-
-    return epoll_wait(ephnd, events, maxevents, timeout);
-}
-*/
 
 EPoller::EPoller(std::size_t elements)
 {
@@ -36,9 +13,7 @@ EPoller::EPoller(std::size_t elements)
     {
         throw std::system_error(errno, std::generic_category(), "epoll_create1");
     }
-    coro_mapping.reserve(elements);
     events_hapenned.resize(max_epoll_events);
-    //registered_events.reserve(elements)
 }
 
 EPoller::~EPoller()
@@ -47,97 +22,85 @@ EPoller::~EPoller()
         ::close(epoll_descriptor);
 }
 
-struct epoll_event CreateReadEvent(int fd)
+struct epoll_event CreateReadEvent(int fd, uint32_t coro_id)
 {
     struct epoll_event event;
     event.events = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLET;
-    event.data.fd = fd;
+    event.data.u64 =  pack_id_fd(fd, coro_id);
 
     return event;
 }
 
-void EPoller::AddAcceptEvent(int fd, int coro_id)
+void EPoller::AddAcceptEvent(int fd, uint32_t coro_id)
 {
-    // struct epoll_event event;
-    // event.events = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLET;
-    // event.data.fd = fd;
-    auto event = CreateReadEvent(fd);
+    auto event = CreateReadEvent(fd, coro_id);
     accept_descriptor = fd;
     if(epoll_ctl(epoll_descriptor, EPOLL_CTL_ADD, fd, &event) < 0)
     {
         if (errno != EEXIST)
             throw std::system_error(errno, std::generic_category(), "epoll_ctl add accept");
     }
-    coro_mapping[fd] = coro_id;
 }
 
-struct epoll_event SetFullEventMask(int fd)
+struct epoll_event SetFullEventMask(int fd, uint32_t coro_id)
 {
     struct epoll_event event;
     event.events = EPOLLOUT | EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLET;
-    event.data.fd = fd;
+    event.data.u64 = pack_id_fd(fd, coro_id);;
 
     return event;
 }
 
-void EPoller::AppendReadEvent(int fd, int coro_id)
+void EPoller::AppendReadEvent(int fd, uint32_t coro_id)
 {
-    auto event = SetFullEventMask(fd);   
+    auto event = SetFullEventMask(fd, coro_id);   
     if (epoll_ctl(epoll_descriptor, EPOLL_CTL_MOD, fd, &event) < 0)
         throw std::system_error(errno, std::generic_category(), "epoll_ctl"); 
 }
 
-
-void EPoller::AddReadEvent(int fd, int coro_id)
+void EPoller::AddReadEvent(int fd, uint32_t coro_id)
 {
-    auto event = CreateReadEvent(fd);
+    auto event = CreateReadEvent(fd, coro_id);
 
     if(epoll_ctl(epoll_descriptor, EPOLL_CTL_ADD, fd, &event) < 0)
     {
         if (errno != EEXIST)
             throw std::system_error(errno, std::generic_category(), "epoll_ctl add accept");
     }
-    coro_mapping[fd] = coro_id;
 }
 
-struct epoll_event CreateWriteEvent(int fd)
+struct epoll_event CreateWriteEvent(int fd, uint32_t coro_id)
 {
     struct epoll_event event;
     event.events = EPOLLOUT | EPOLLERR | EPOLLHUP | EPOLLET;
-    event.data.fd = fd;
+    event.data.u64 = pack_id_fd(fd, coro_id);
 
     return event;
 }
 
-void EPoller::AppendWriteEvent(int fd, int coro_id)
+void EPoller::AppendWriteEvent(int fd, uint32_t coro_id)
 {
-    auto event = SetFullEventMask(fd);   
+    auto event = SetFullEventMask(fd, coro_id);
     if (epoll_ctl(epoll_descriptor, EPOLL_CTL_MOD, fd, &event) < 0)
         throw std::system_error(errno, std::generic_category(), "epoll_ctl"); 
 }
 
-void EPoller::AddWriteEvent(int fd, int coro_id)
+void EPoller::AddWriteEvent(int fd, uint32_t coro_id)
 {
-    auto event = CreateWriteEvent(fd);
+    auto event = CreateWriteEvent(fd, coro_id);
 
     if(epoll_ctl(epoll_descriptor, EPOLL_CTL_ADD, fd, &event) < 0)
     {
         if (errno != EEXIST)
             throw std::system_error(errno, std::generic_category(), "epoll_ctl add accept");
     }
-    coro_mapping[fd] = coro_id;
 }
 
-void EPoller::RemoveWriteEvent(int fd)
+void EPoller::RemoveWriteEvent(int fd, uint32_t coro_id)
 {
-    auto event = CreateReadEvent(fd);
+    auto event = CreateReadEvent(fd, coro_id);
     if (epoll_ctl(epoll_descriptor, EPOLL_CTL_MOD, fd, &event) < 0)
         throw std::system_error(errno, std::generic_category(), "epoll_ctl");
-}
-
-int EPoller::FindCoroId(int fd)
-{
-    return coro_mapping.at(fd);
 }
 
 std::vector<PollResult> EPoller::Poll(int timeout_milliseconds)
@@ -154,16 +117,15 @@ std::vector<PollResult> EPoller::Poll(int timeout_milliseconds)
 
     for (int i = 0; i < nfds; ++i) 
     {
-        int fd = events_hapenned[i].data.fd;
+        auto [coro_id, fd] = unpack_id_fd(events_hapenned[i].data.u64);
         uint32_t event_flags = events_hapenned[i].events;
-        int coro_id = FindCoroId(fd);
 
         // A. Проверка на ошибки или отключение
         if (event_flags & (EPOLLERR | EPOLLHUP)) {
             // Ошибка на дескрипторе или удаленный конец закрыл соединение
             epoll_ctl(epoll_descriptor, EPOLL_CTL_DEL, fd, NULL); // Удаляем из epoll
             //close(fd); // Закрываем дескриптор
-            coro_mapping.erase(fd);
+            //coro_mapping.erase(fd);
             result.emplace_back(coro_id, DescriptorOperations::Error);
             continue; // Переходим к следующему событию
         }

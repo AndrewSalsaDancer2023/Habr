@@ -6,7 +6,7 @@ include_directories(include)
 #set(CORO_USE_VALGRIND ON)
 
 
-file(GLOB SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c)
+file(GLOB SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/utils.cpp)
 list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/socket/address.cpp)
 list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/socket/basesocket.cpp)
 list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/socket/epoller.cpp)

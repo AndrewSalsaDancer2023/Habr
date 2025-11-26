@@ -7,16 +7,6 @@
 #include <unordered_map>
 
 const int invalid_handle = -1;
-
-// enum class DescriptorOperations
-// {
-//   Read,
-//   Write,
-//   Accept,
-//   Close,
-//   Error
-// };
-
 enum class DescriptorOperations: unsigned char
 {
   Accept,
@@ -38,19 +28,18 @@ class EPoller
 public:
     EPoller(std::size_t elements = 1024);
     ~EPoller();
-    void AddAcceptEvent(int fd, int coro_id);
-    void AddReadEvent(int fd, int coro_id);
-    void AddWriteEvent(int fd, int coro_id);
-    void AppendWriteEvent(int fd, int coro_id);
-    void AppendReadEvent(int fd, int coro_id);
-	void RemoveWriteEvent(int fd);
+    void AddAcceptEvent(int fd, uint32_t coro_id);
+    void AddReadEvent(int fd, uint32_t coro_id);
+    void AddWriteEvent(int fd, uint32_t coro_id);
+    void AppendWriteEvent(int fd, uint32_t coro_id);
+    void AppendReadEvent(int fd, uint32_t coro_id);
+	void RemoveWriteEvent(int fd, uint32_t coro_id);
 	std::vector<PollResult> Poll(int timeout_milliseconds = 10);
 private:
     int FindCoroId(int fd);
     int epoll_descriptor = invalid_handle;
     int accept_descriptor = invalid_handle;
-//  std::unordered_map<int, epoll_event> registered_events;
-    std::unordered_map<int, int> coro_mapping;
+
     std::vector<epoll_event> events_hapenned;
 };
 
