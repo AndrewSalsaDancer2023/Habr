@@ -1,5 +1,5 @@
 #pragma once
-//#include "poller.h"
+
 #include <vector>
 #include <map>
 #include <sys/epoll.h>
@@ -7,6 +7,8 @@
 #include <unordered_map>
 
 const int invalid_handle = -1;
+const int sleep_default = 10;
+
 enum class DescriptorOperations: unsigned char
 {
   Accept,
@@ -14,7 +16,6 @@ enum class DescriptorOperations: unsigned char
   Write,
   Error
 };
-
 
 struct PollResult
 {
@@ -26,7 +27,7 @@ struct PollResult
 class EPoller
 {
 public:
-    EPoller(std::size_t elements = 1024);
+    EPoller();
     ~EPoller();
     void AddAcceptEvent(int fd, uint32_t coro_id);
     void AddReadEvent(int fd, uint32_t coro_id);
@@ -34,9 +35,11 @@ public:
     void AppendWriteEvent(int fd, uint32_t coro_id);
     void AppendReadEvent(int fd, uint32_t coro_id);
 	void RemoveWriteEvent(int fd, uint32_t coro_id);
-	std::vector<PollResult> Poll(int timeout_milliseconds = 10);
+	std::vector<PollResult> Poll(int timeout_milliseconds = sleep_default);
 private:
-    int FindCoroId(int fd);
+    void AddEpollEvent(int fd, epoll_event& event);
+    void ModifyEpollEvent(int fd, epoll_event& event);
+    
     int epoll_descriptor = invalid_handle;
     int accept_descriptor = invalid_handle;
 

@@ -10,7 +10,6 @@
 #include <utility>
 #include <vector>
 #include "address.h"
-//#include "epoller.h"
 #include "coroutine.h"
 #include <memory>
 
@@ -33,9 +32,9 @@ public:
     ssize_t Read(void* buf, size_t count);
 	std::string AsyncRead() const;
     ssize_t Write(const void* buf, size_t count);
-	void AsyncWrite(const std::string& content, task& coro) const;
+	void AsyncWrite(const std::string& content, Task& coro) const;
 protected:    
-	SocketAddress address_;
+	SocketAddress address;
 };
 
 class BaseServerSocket: public BaseSocket {
@@ -46,8 +45,8 @@ public:
 
 	std::vector<RWSocket> AsyncAccept() const;
 private:
-	SocketAddress GetAddress() { return address_;}
-	SocketAddress address_;
+	SocketAddress GetAddress() { return address;}
+	SocketAddress address;
 };
 
 

@@ -12,6 +12,8 @@
 
 #include "utils.h"
 
+#include "coro1.h"
+
 size_t buffer_size = 512;
 int port = 8080;
 std::string address{"127.0.0.1"};
@@ -46,14 +48,14 @@ std::string GetTimeString()
     return std::string(ctime(&current_time));
 }
 
-void client_handler(task& coro, const RWSocket& socket) 
+void client_handler(Task& coro, const RWSocket& socket) 
 {
     try 
     {
-        poller->AddReadEvent(socket.GetFd(), coro.get_id());
+        poller->AddReadEvent(socket.GetFd(), coro.GetId());
         while(true)
         {
-            coro.yield();
+            coro.Yield();
             auto input = socket.AsyncRead();
             if(input.empty())
                 return;
@@ -62,7 +64,7 @@ void client_handler(task& coro, const RWSocket& socket)
 
             if(input == "\n")
             {
-                std::cout << "Exit coroutine: " << coro.get_id() << std::endl;
+                std::cout << "Exit coroutine: " << coro.GetId() << std::endl;
                 return;
             }   
 
@@ -78,10 +80,10 @@ void client_handler(task& coro, const RWSocket& socket)
                     result = errorinput;
             }
             
-            // poller->AddWriteEvent(socket.GetFd(), coro.get_id());
-            poller->AppendWriteEvent(socket.GetFd(), coro.get_id());
+            // poller->AddWriteEvent(socket.GetFd(), coro.GetId());
+            poller->AppendWriteEvent(socket.GetFd(), coro.GetId());
             socket.AsyncWrite(result, coro);
-            poller->RemoveWriteEvent(socket.GetFd(), coro.get_id());
+            poller->RemoveWriteEvent(socket.GetFd(), coro.GetId());
         }
     } catch (const std::exception& ex) {
         std::cerr << "Exception: " << ex.what() << std::endl;
@@ -91,31 +93,24 @@ void client_handler(task& coro, const RWSocket& socket)
 
 int main(int argc, char **argv)
 {
- /*   uint32_t my_id = 12345; 
-    int my_fd = 42;             
-    uint64_t packed_value = pack_id_fd(my_id, my_fd);
-    auto [id, fd] = unpack_id_fd(packed_value);
-    std::cout << id << std::endl;
-    std::cout << fd << std::endl;
-    return 0;*/
     try
     {
-        // scheduler.init_scheduler(poller);
-        scheduler.create_task({[](task& accepttask)
+        // scheduler.InitScheduler(poller);
+        scheduler.CreateTask({[](Task& acceptTask)
         {
 	        BaseServerSocket sock;
 	        sock.Bind(SocketAddress(address, port));
 	        sock.Listen();
         
-            poller->AddAcceptEvent(sock.GetFd(), accepttask.get_id());
+            poller->AddAcceptEvent(sock.GetFd(), acceptTask.GetId());
 	        while(true) 
             {
-                accepttask.yield();
+                acceptTask.Yield();
                 // auto clientSockets = sock.AsyncAccept();
                 // for(auto&& clientsocket : clientSockets)
                 for(auto&& clientsocket : sock.AsyncAccept())
                 {
-                    scheduler.create_task([clientsock = std::move(clientsocket)](task& client_coro)
+                    scheduler.CreateTask([clientsock = std::move(clientsocket)](Task& client_coro)
                     {
                         // RWSocket othsocket = std::move(clientsocket);
                         client_handler(client_coro, clientsock);
@@ -123,7 +118,7 @@ int main(int argc, char **argv)
                 }
             }
         }});
-        scheduler.run_tasks();
+        scheduler.RunTasks();
     }
     catch(const std::exception& e)
     {
@@ -132,3 +127,25 @@ int main(int argc, char **argv)
     }
 	return EXIT_SUCCESS;
 }
+
+
+/*
+int main()
+{
+    int numres = 15;
+    coroutine test{[numres](coroutine & self)
+    {
+        for (int i = 0; i < numres; ++i)
+        {
+            std::cout << "coroutine " << i << std::endl;
+            self.Yield();
+        }
+    }};
+    while(test)
+    {
+        std::cout << "main" << std::endl;
+        test();
+    }
+    return 0;
+}
+*/

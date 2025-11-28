@@ -6,102 +6,65 @@
 #include <utility>
 #include <stdexcept>
 
-void Scheduler::create_task(std::function<void (task &)> func)
+void Scheduler::CreateTask(std::function<void (Task &)> func)
 {
 	
-	task_map.emplace(std::piecewise_construct,
+	Task_map.emplace(std::piecewise_construct,
             		 std::forward_as_tuple(id),
             		 std::forward_as_tuple(func, id));
 	id++;
-	//scheduler_data.task_list.push_back(std::move(task{func, id++}));
-	//scheduler_data.task_list.emplace_back(func, id++);
 }
 
 Scheduler::Scheduler(std::shared_ptr<EPoller> plr)
 		  :poller{plr}
 {}
 
-void Scheduler::run_tasks(void)
+void Scheduler::ProcessEvents()
 {
-	while(task_map.size() > 0)
+	auto events = poller->Poll();
+    for(const auto& evt:events)
 	{
-		for(auto curr_task = task_map.begin();
-				 curr_task != task_map.end();
-		   )
-		   {
-				if((curr_task->second.get_status() != task_status::TASK_RUNNING) && (curr_task->second.get_status() != task_status::TASK_CREATED))
-				{
-					curr_task++;
-					continue;
-				}
-
-				curr_task->second();
-				if(curr_task->second.get_status() == TASK_FINISHED)
-				{
-					curr_task = task_map.erase(curr_task);
-				}
-				else
-				{
-					curr_task++;
-				}
-		   }
-
-		auto events = poller->Poll();
-        for(const auto& evt:events)
-		{
-			auto iter = task_map.find(evt.coro_id);
-			if(iter == task_map.end())
-				throw std::runtime_error("coro absent in scheduler map");
+		auto iter = Task_map.find(evt.coro_id);
+		if(iter == Task_map.end())
+			throw std::runtime_error("coro is absent in scheduler map");
 	
-			// evt.coro_id
-			if(evt.command == DescriptorOperations::Error)
-			{
-				std::runtime_error specific_error("Это сообщение об ошибке, созданное без throw.");
-        		std::exception_ptr exptr = std::make_exception_ptr(specific_error);
-				iter->second.set_exception(exptr);
-				continue;
-			}
-			iter->second.resume();
-
+		if(evt.command == DescriptorOperations::Error)
+		{
+			std::runtime_error specific_error("poller exception");
+        	std::exception_ptr exptr = std::make_exception_ptr(specific_error);
+			iter->second.SetException(exptr);
+			continue;
 		}
-		
+		iter->second.AllowResume();
 	}
-	std::cout << "Finished run_tasks!" << std::endl;
+
 }
 
-/*
-void run_tasks(void)
+void Scheduler::RunTasks(void)
 {
-	while(scheduler_data.task_list.size() > 0)
+	while(Task_map.size() > 0)
 	{
-		for(scheduler_data.curr_task = scheduler_data.task_list.begin();
-			scheduler_data.curr_task != scheduler_data.task_list.end();
+		for(auto curr_Task = Task_map.begin();
+				 curr_Task != Task_map.end();
 		   )
 		   {
-				if(((scheduler_data.curr_task)->get_status() != task_status::TASK_RUNNING) && ((scheduler_data.curr_task)->get_status() != task_status::TASK_CREATED))
+				if((curr_Task->second.GetStatus() != task_status::Task_RUNNING) && (curr_Task->second.GetStatus() != task_status::Task_CREATED))
 				{
-					scheduler_data.curr_task++;
+					curr_Task++;
 					continue;
 				}
 
-				(*scheduler_data.curr_task)();
-				if((scheduler_data.curr_task)->get_status() == TASK_FINISHED)
+				curr_Task->second();
+				if(curr_Task->second.GetStatus() == Task_FINISHED)
 				{
-					scheduler_data.curr_task = scheduler_data.task_list.erase(scheduler_data.curr_task);
+					curr_Task = Task_map.erase(curr_Task);
 				}
 				else
 				{
-					scheduler_data.curr_task++;
+					curr_Task++;
 				}
 		   }
-		auto events = scheduler_data.poller->Poll();
-        for(const auto& evt:events)
-		{
-			// evt.coro_id
-			// if(evt.command == DescriptorOperations::Error)
-		}
-		
+		ProcessEvents();
 	}
-	std::cout << "Finished run_tasks!" << std::endl;
+	std::cout << "Finished RunTasks!" << std::endl;
 }
-*/	

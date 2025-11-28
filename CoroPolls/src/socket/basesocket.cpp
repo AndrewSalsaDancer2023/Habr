@@ -21,7 +21,7 @@ void BaseSocket::InitFileDescriptor(int s)
 	fd_ptr = std::shared_ptr<int>(new int(s), [](int* fd_ptr) {
             std::cout << "closing fd: " << *fd_ptr << " via shared_ptr deleter." << std::endl;
             close(*fd_ptr); // Вызов close() при удалении последнего shared_ptr
-            delete fd_ptr; // Освобождение памяти, выделенной под сам int*
+            delete fd_ptr;
     });
 }
 
@@ -48,8 +48,8 @@ int BaseSocket::SetupNonblockingMode(int s)
 
 int BaseSocket::CreateSocket(int domain, int type)
 {
-    auto s = socket(domain, type, 0);
-    if (s == static_cast<decltype(s)>(-1)) {
+    int s = socket(domain, type, 0);
+    if (s == -1) {
         throw std::system_error(errno, std::generic_category(), "socket");
     }
    return SetupNonblockingMode(s);
@@ -65,8 +65,8 @@ int BaseSocket::GetFd() const
 
 void BaseServerSocket::Bind(SocketAddress address)
 {
-	address_ = std::move(address);
-	auto [rawaddr, len] = address_.RawAddr();
+	address = std::move(address);
+	auto [rawaddr, len] = address.RawAddr();
     int optval = 1;
     socklen_t optlen = sizeof(optval);
     if (setsockopt(*fd_ptr, SOL_SOCKET, SO_REUSEADDR, (char*) &optval, optlen) < 0) {
@@ -119,7 +119,7 @@ std::vector<RWSocket> BaseServerSocket::AsyncAccept() const
 RWSocket::RWSocket(SocketAddress address, int fd)
 			:BaseSocket(fd)
 {
-	address_ = std::move(address);
+	address = std::move(address);
 }
 
 ssize_t RWSocket::Read(void* buf, size_t count)
@@ -157,7 +157,7 @@ ssize_t RWSocket::Write(const void* buf, size_t count)
 	return ::write(*fd_ptr, buf, count);
 }
 
-void RWSocket::AsyncWrite(const std::string& content, task& coro) const
+void RWSocket::AsyncWrite(const std::string& content, Task& coro) const
 {
 	if(content.empty())
 		return;
@@ -182,7 +182,7 @@ void RWSocket::AsyncWrite(const std::string& content, task& coro) const
         	if (errno == EAGAIN || errno == EWOULDBLOCK) {
             	// Буфер сокета заполнился. Это НОРМАЛЬНО.
             	// Мы выходим из обработчика и ждем следующего события EPOLLOUT.
-				coro.yield();
+				coro.Yield();
         	} 
 			else 
 				throw std::system_error(errno, std::generic_category(), "async wtite");
@@ -196,20 +196,11 @@ void ConnectToServer(int fd, SocketAddress& address)
 {
     auto [rawaddr, len] = address.RawAddr();
     if (connect(fd, rawaddr, len) != 0) 
-        throw std::system_error(errno, std::generic_category(), "connect");        
-
-    // return 0;
+        throw std::system_error(errno, std::generic_category(), "connect");
 }
 
 void ClientSocket::Connect(SocketAddress address)
 {
-	address_ = std::move(address);
-	//address.RawAddr()
-	
-	// int ret = GetConnectionResult(GetFd(), address);
-    ConnectToServer(GetFd(), address_);
-//	int ret = poller->Result();
-    // if (ret < 0) {
-	// 	throw std::system_error(-ret, std::generic_category(), "connect");
-	// }
+	address = std::move(address);
+    ConnectToServer(GetFd(), address);
 }
