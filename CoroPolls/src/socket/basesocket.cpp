@@ -6,47 +6,45 @@
 #include <stdexcept>
 #include <system_error>
 
-BaseSocket::BaseSocket(int domain, int type)
+NonBlockSocket::NonBlockSocket(int domain, int type)
 {
 	InitFileDescriptor(CreateSocket(domain, type));
 }
 
-BaseSocket::BaseSocket(int fd)
+NonBlockSocket::NonBlockSocket(int fd)
 {
 	InitFileDescriptor(SetupNonblockingMode(fd));
 }
 
-void BaseSocket::InitFileDescriptor(int s)
+void NonBlockSocket::InitFileDescriptor(int s)
 {
-	fd_ptr = std::shared_ptr<int>(new int(s), [](int* fd_ptr) {
+	fd_ptr = std::shared_ptr<int>(new int(s), [](int* fd_ptr) 
+	{
             std::cout << "closing fd: " << *fd_ptr << " via shared_ptr deleter." << std::endl;
             close(*fd_ptr); // Вызов close() при удалении последнего shared_ptr
             delete fd_ptr;
     });
 }
 
-int BaseSocket::SetupNonblockingMode(int s)
+int NonBlockSocket::SetupNonblockingMode(int s)
 {
-    int value;
+    int value = 1;
     socklen_t len = sizeof(value);
-    if (getsockopt(s, SOL_SOCKET, SO_TYPE, (char*) &value, &len) == 0) {
-        value = 1;
-        if (setsockopt(s, SOL_SOCKET, SO_KEEPALIVE, (char*) &value, len) < 0) {
-                throw std::system_error(errno, std::generic_category(), "setsockopt");
-        }
-    }
+    
+    if (setsockopt(s, SOL_SOCKET, SO_KEEPALIVE, (char*) &value, len) < 0) 
+        throw std::system_error(errno, std::generic_category(), "setsockopt");    
 
     auto flags = fcntl(s, F_GETFL, 0);
     if (flags < 0) {
-        throw std::system_error(errno, std::generic_category(), "fcntl");
+        throw std::system_error(errno, std::generic_category(), "fcntl error getting flags");
     }
     if (fcntl(s, F_SETFL, flags | O_NONBLOCK) < 0) {
-        throw std::system_error(errno, std::generic_category(), "fcntl");
+        throw std::system_error(errno, std::generic_category(), "fcntl error setting flag");
     }
     return s;
 }
 
-int BaseSocket::CreateSocket(int domain, int type)
+int NonBlockSocket::CreateSocket(int domain, int type)
 {
     int s = socket(domain, type, 0);
     if (s == -1) {
@@ -55,7 +53,7 @@ int BaseSocket::CreateSocket(int domain, int type)
    return SetupNonblockingMode(s);
 }
 
-int BaseSocket::GetFd() const
+int NonBlockSocket::GetFd() const
 {
     if (fd_ptr)
         return *fd_ptr;
@@ -63,7 +61,7 @@ int BaseSocket::GetFd() const
    	return -1;
 }
 
-void BaseServerSocket::Bind(SocketAddress address)
+void ServerNonBlockSocket::Bind(SocketAddress address)
 {
 	address = std::move(address);
 	auto [rawaddr, len] = address.RawAddr();
@@ -77,16 +75,16 @@ void BaseServerSocket::Bind(SocketAddress address)
     }
 }
 
-void BaseServerSocket::Listen(int backlog)
+void ServerNonBlockSocket::Listen(int backlog)
 {
     if (listen(*fd_ptr, backlog) < 0) {
         throw std::system_error(errno, std::generic_category(), "listen");
     }
 }
  
-std::vector<RWSocket> BaseServerSocket::AsyncAccept() const
+std::vector<NonBlockRWSocket> ServerNonBlockSocket::AsyncAccept()
 {
-	std::vector<RWSocket> res;
+	std::vector<NonBlockRWSocket> res;
 	char clientaddr[sizeof(sockaddr_in)];
     socklen_t len = static_cast<socklen_t>(sizeof(sockaddr_in));
 	bool hasData = true;
@@ -110,24 +108,24 @@ std::vector<RWSocket> BaseServerSocket::AsyncAccept() const
         // Успешно приняли новое соединение.
         // conn_sock_fd — это новый сокет для клиента.
 		std::cout << "New connection accepted on fd: " << conn_sock_fd << std::endl;
-		res.push_back(std::move(RWSocket(SocketAddress{reinterpret_cast<sockaddr*>(&clientaddr[0])}, conn_sock_fd)));
+		res.emplace_back(SocketAddress{reinterpret_cast<sockaddr*>(&clientaddr[0])}, conn_sock_fd);
 	}while(hasData);
 
 	return res;
 }
 
-RWSocket::RWSocket(SocketAddress address, int fd)
-			:BaseSocket(fd)
+NonBlockRWSocket::NonBlockRWSocket(SocketAddress address, int fd)
+			:NonBlockSocket(fd)
 {
 	address = std::move(address);
 }
 
-ssize_t RWSocket::Read(void* buf, size_t count)
+ssize_t NonBlockRWSocket::Read(void* buf, size_t count)
 {
 	return ::read(*fd_ptr, buf, count); 
 }
 
-std::string RWSocket::AsyncRead() const
+std::string NonBlockRWSocket::AsyncRead()
 {
 	std::string result;
     char buffer[256];
@@ -152,12 +150,12 @@ std::string RWSocket::AsyncRead() const
 	return result;
 }
 
-ssize_t RWSocket::Write(const void* buf, size_t count)
+ssize_t NonBlockRWSocket::Write(const void* buf, size_t count)
 {
 	return ::write(*fd_ptr, buf, count);
 }
 
-void RWSocket::AsyncWrite(const std::string& content, Task& coro) const
+void NonBlockRWSocket::AsyncWrite(const std::string& content, Task& coro)
 {
 	if(content.empty())
 		return;
@@ -185,22 +183,96 @@ void RWSocket::AsyncWrite(const std::string& content, Task& coro) const
 				coro.Yield();
         	} 
 			else 
-				throw std::system_error(errno, std::generic_category(), "async wtite");
+				throw std::system_error(errno, std::generic_category(), "async write");
     	}
 		remaining_bytes = total_size - bytes_sent;
 	}
 
 }
 
+Socket::Socket(int domain, int type)
+{
+	CreateSocket(domain, type);
+}
+
+Socket::~Socket()
+{
+	close(fd);
+}
+
+int Socket::GetFd() const
+{
+	return fd;
+}
+
+void Socket::CreateSocket(int domain, int type)
+{
+    fd = socket(domain, type, 0);
+    if (fd == -1) {
+        throw std::system_error(errno, std::generic_category(), "socket");
+    }
+}
+
+ssize_t Socket::Read(void* buf, size_t count)
+{
+	return ::read(fd, buf, count); 
+}
+
+ssize_t Socket::Write(const void* buf, size_t count)
+{
+	return ::write(fd, buf, count);
+}
+
+
+ClientSocket::ClientSocket()
+    :Socket(AF_INET, SOCK_STREAM)
+{}
+/*
 void ConnectToServer(int fd, SocketAddress& address)
 {
     auto [rawaddr, len] = address.RawAddr();
     if (connect(fd, rawaddr, len) != 0) 
         throw std::system_error(errno, std::generic_category(), "connect");
 }
-
-void ClientSocket::Connect(SocketAddress address)
+*/
+void ClientSocket::Connect(SocketAddress& address)
 {
-	address = std::move(address);
-    ConnectToServer(GetFd(), address);
+/*	address = std::move(address);
+    ConnectToServer(GetFd(), address);*/
+	auto [rawaddr, len] = address.RawAddr();
+    if (connect(fd, rawaddr, len) != 0) 
+    	throw std::system_error(errno, std::generic_category(), "connect");
+}
+
+void ClientSocket::SendString(const std::string& str)
+{
+    auto res = Write(str.c_str(), str.length());
+    if(res < 0)
+        throw std::system_error(errno, std::generic_category(), "Unable write string to socket!");
+    if(!res) 
+        std::system_error(errno, std::generic_category(), "Server closed connection!");
+}
+
+std::string ClientSocket::ReceiveString()
+{
+    char buffer[256];
+	bool hasData = true;
+    std::string result;
+
+ 	do {
+		ssize_t bytes_read = ::read(fd, buffer, sizeof(buffer));
+		if(bytes_read>0)
+			result.append(buffer, bytes_read);
+		else
+		{
+			hasData = false;
+			if (bytes_read < 0) 
+			{
+				if (errno != EAGAIN && errno != EWOULDBLOCK)
+					throw std::system_error(errno, std::generic_category(), "async read");
+			}
+		}
+    }while(hasData);
+    
+    return result;
 }

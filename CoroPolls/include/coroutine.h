@@ -95,7 +95,7 @@ private:
     ucontext_t caller;
     ucontext_t callee;
     std::unique_ptr<unsigned char[]> stack;
-    std::function<void (Task &)> func = nullptr;
+    std::function<void (Task &)> func;
     
     uint32_t id = 0;
     task_status status = task_status::Task_CREATED;

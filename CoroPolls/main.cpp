@@ -9,10 +9,7 @@
 #include <string>
 #include <time.h>
 #include "scheduler.h"
-
 #include "utils.h"
-
-#include "coro1.h"
 
 size_t buffer_size = 512;
 int port = 8080;
@@ -48,7 +45,7 @@ std::string GetTimeString()
     return std::string(ctime(&current_time));
 }
 
-void client_handler(Task& coro, const RWSocket& socket) 
+void client_handler(Task& coro, NonBlockRWSocket& socket) 
 {
     try 
     {
@@ -62,12 +59,6 @@ void client_handler(Task& coro, const RWSocket& socket)
             
             std::cout << "Received: " << input << std::endl;
 
-            if(input == "\n")
-            {
-                std::cout << "Exit coroutine: " << coro.GetId() << std::endl;
-                return;
-            }   
-
             std::string result;
 
             if(startsWithSubstring(input, timecommand))
@@ -80,7 +71,6 @@ void client_handler(Task& coro, const RWSocket& socket)
                     result = errorinput;
             }
             
-            // poller->AddWriteEvent(socket.GetFd(), coro.GetId());
             poller->AppendWriteEvent(socket.GetFd(), coro.GetId());
             socket.AsyncWrite(result, coro);
             poller->RemoveWriteEvent(socket.GetFd(), coro.GetId());
@@ -95,10 +85,9 @@ int main(int argc, char **argv)
 {
     try
     {
-        // scheduler.InitScheduler(poller);
-        scheduler.CreateTask({[](Task& acceptTask)
+        scheduler.CreateTask([](Task& acceptTask)
         {
-	        BaseServerSocket sock;
+	        ServerNonBlockSocket sock;
 	        sock.Bind(SocketAddress(address, port));
 	        sock.Listen();
         
@@ -106,18 +95,15 @@ int main(int argc, char **argv)
 	        while(true) 
             {
                 acceptTask.Yield();
-                // auto clientSockets = sock.AsyncAccept();
-                // for(auto&& clientsocket : clientSockets)
                 for(auto&& clientsocket : sock.AsyncAccept())
                 {
-                    scheduler.CreateTask([clientsock = std::move(clientsocket)](Task& client_coro)
+                    scheduler.CreateTask([clientsock = std::move(clientsocket)](Task& client_coro) mutable
                     {
-                        // RWSocket othsocket = std::move(clientsocket);
                         client_handler(client_coro, clientsock);
                     });
                 }
             }
-        }});
+        });
         scheduler.RunTasks();
     }
     catch(const std::exception& e)
@@ -127,25 +113,3 @@ int main(int argc, char **argv)
     }
 	return EXIT_SUCCESS;
 }
-
-
-/*
-int main()
-{
-    int numres = 15;
-    coroutine test{[numres](coroutine & self)
-    {
-        for (int i = 0; i < numres; ++i)
-        {
-            std::cout << "coroutine " << i << std::endl;
-            self.Yield();
-        }
-    }};
-    while(test)
-    {
-        std::cout << "main" << std::endl;
-        test();
-    }
-    return 0;
-}
-*/

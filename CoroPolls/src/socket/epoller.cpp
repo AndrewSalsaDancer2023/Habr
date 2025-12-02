@@ -6,12 +6,18 @@
 const int epoll_flags = EPOLL_CLOEXEC;
 const int max_epoll_events = 100;
 
+const std::string epoll_create_error{"epoll_create1 failed"};
+const std::string epoll_add_desc_error{"epoll add descriptor failed"};
+const std::string epoll_modify_desc_error{"epoll modify descriptor failed"};
+const std::string epoll_desc_exists_error{"epoll descriptor already added"};
+const std::string epoll_wait_error{"epoll wait error"};
+
 EPoller::EPoller()
 {
     epoll_descriptor = epoll_create1(epoll_flags);
     if(epoll_descriptor ==  invalid_handle) 
     {
-        throw std::system_error(errno, std::generic_category(), "epoll_create1");
+        throw std::system_error(errno, std::generic_category(), epoll_create_error);
     }
     events_hapenned.resize(max_epoll_events);
 }
@@ -36,7 +42,9 @@ void EPoller::AddEpollEvent(int fd, epoll_event& event)
     if(epoll_ctl(epoll_descriptor, EPOLL_CTL_ADD, fd, &event) < 0)
     {
         if (errno != EEXIST)
-            throw std::system_error(errno, std::generic_category(), "epoll_ctl add accept");
+            throw std::system_error(errno, std::generic_category(), epoll_add_desc_error);
+        else
+            throw std::system_error(errno, std::generic_category(), epoll_desc_exists_error);
     }
 }
 
@@ -45,11 +53,6 @@ void EPoller::AddAcceptEvent(int fd, uint32_t coro_id)
     auto event = CreateReadEvent(fd, coro_id);
     accept_descriptor = fd;
     AddEpollEvent(fd, event);
- /*   if(epoll_ctl(epoll_descriptor, EPOLL_CTL_ADD, fd, &event) < 0)
-    {
-        if (errno != EEXIST)
-            throw std::system_error(errno, std::generic_category(), "epoll_ctl add accept");
-    }*/
 }
 
 epoll_event CreateReadWriteEvents(int fd, uint32_t coro_id)
@@ -64,14 +67,12 @@ epoll_event CreateReadWriteEvents(int fd, uint32_t coro_id)
 void EPoller::ModifyEpollEvent(int fd, epoll_event& event)
 {
     if (epoll_ctl(epoll_descriptor, EPOLL_CTL_MOD, fd, &event) < 0)
-        throw std::system_error(errno, std::generic_category(), "epoll_ctl"); 
+        throw std::system_error(errno, std::generic_category(), epoll_modify_desc_error); 
 }
 
 void EPoller::AppendReadEvent(int fd, uint32_t coro_id)
 {
     auto event = CreateReadWriteEvents(fd, coro_id);   
-    // if (epoll_ctl(epoll_descriptor, EPOLL_CTL_MOD, fd, &event) < 0)
-        // throw std::system_error(errno, std::generic_category(), "epoll_ctl"); 
     ModifyEpollEvent(fd, event);
 }
 
@@ -79,12 +80,6 @@ void EPoller::AddReadEvent(int fd, uint32_t coro_id)
 {
     auto event = CreateReadEvent(fd, coro_id);
     AddEpollEvent(fd, event);
-    /*
-    if(epoll_ctl(epoll_descriptor, EPOLL_CTL_ADD, fd, &event) < 0)
-    {
-        if (errno != EEXIST)
-            throw std::system_error(errno, std::generic_category(), "epoll_ctl add accept");
-    }*/
 }
 
 struct epoll_event CreateWriteEvent(int fd, uint32_t coro_id)
@@ -100,28 +95,18 @@ void EPoller::AppendWriteEvent(int fd, uint32_t coro_id)
 {
     auto event = CreateReadWriteEvents(fd, coro_id);
     ModifyEpollEvent(fd, event);
-    // if (epoll_ctl(epoll_descriptor, EPOLL_CTL_MOD, fd, &event) < 0)
-        // throw std::system_error(errno, std::generic_category(), "epoll_ctl"); 
 }
 
 void EPoller::AddWriteEvent(int fd, uint32_t coro_id)
 {
     auto event = CreateWriteEvent(fd, coro_id);
     AddEpollEvent(fd, event);
-/*
-    if(epoll_ctl(epoll_descriptor, EPOLL_CTL_ADD, fd, &event) < 0)
-    {
-        if (errno != EEXIST)
-            throw std::system_error(errno, std::generic_category(), "epoll_ctl add accept");
-    }*/
 }
 
 void EPoller::RemoveWriteEvent(int fd, uint32_t coro_id)
 {
     auto event = CreateReadEvent(fd, coro_id);
     ModifyEpollEvent(fd, event);
-    // if (epoll_ctl(epoll_descriptor, EPOLL_CTL_MOD, fd, &event) < 0)
-        // throw std::system_error(errno, std::generic_category(), "epoll_ctl");
 }
 
 std::vector<PollResult> EPoller::Poll(int timeout_milliseconds)
@@ -130,10 +115,11 @@ std::vector<PollResult> EPoller::Poll(int timeout_milliseconds)
     int nfds;
     if ((nfds = epoll_wait(epoll_descriptor, &events_hapenned[0], events_hapenned.size(), timeout_milliseconds)) < 0) 
     {
-        if (errno == EINTR) {
+        if (errno == EINTR) 
+        {
             return result;
         }
-        throw std::system_error(errno, std::generic_category(), "epoll_wait");
+        throw std::system_error(errno, std::generic_category(), epoll_wait_error);
     }
 
     for (int i = 0; i < nfds; ++i) 
@@ -152,15 +138,15 @@ std::vector<PollResult> EPoller::Poll(int timeout_milliseconds)
         //Проверка на готовность к чтению (самое распространенное событие)
         if (event_flags & EPOLLIN) 
         {
-            // Если это серверный сокет (слушающий), значит пришло новое соединение
+            //Если это серверный сокет (слушающий), значит пришло новое соединение
             if (fd == accept_descriptor) 
             {
-                // Принять новое соединение (и добавить его в epoll_fd)
+                //Принять новое соединение (и добавить его в epoll_fd)
                 result.emplace_back(coro_id, DescriptorOperations::Accept);
             } 
             else 
             {
-                // Это клиентский сокет, значит можно читать данные
+                //Это клиентский сокет, значит можно читать данные
                 result.emplace_back(coro_id, DescriptorOperations::Read);
             }
         }
@@ -168,7 +154,7 @@ std::vector<PollResult> EPoller::Poll(int timeout_milliseconds)
         {
             //Проверка на готовность к записи
             if (event_flags & EPOLLOUT)
-                // Если сокет готов принимать исходящие данные
+                //Cокет готов принимать исходящие данные
                 result.emplace_back(coro_id, DescriptorOperations::Write);
         }
     }

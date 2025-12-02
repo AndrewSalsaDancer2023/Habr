@@ -19,5 +19,5 @@ public:
     std::string ToString() const;
     std::pair<const sockaddr*, int> RawAddr() const;
 private:
-	struct sockaddr_in Addr_ = {};    
+	struct sockaddr_in address = {};    
 };

@@ -13,45 +13,58 @@
 #include "coroutine.h"
 #include <memory>
 
-class BaseSocket {
+class NonBlockSocket {
 public:
-	BaseSocket(int domain, int type);
-	BaseSocket(int fd);
+	NonBlockSocket(int domain, int type);
+	NonBlockSocket(int fd);
 	int GetFd() const;
 protected:
 	int SetupNonblockingMode(int s);
 	int CreateSocket(int domain, int type);
 	void InitFileDescriptor(int s);
-	mutable std::shared_ptr<int> fd_ptr;
+	std::shared_ptr<int> fd_ptr;
 };
 
-class RWSocket: public BaseSocket {
+class NonBlockRWSocket: public NonBlockSocket {
 public:
-	RWSocket() : BaseSocket(AF_INET, SOCK_STREAM){}
-	RWSocket(SocketAddress address, int fd);
+	NonBlockRWSocket() : NonBlockSocket(AF_INET, SOCK_STREAM){}
+	NonBlockRWSocket(SocketAddress address, int fd);
     ssize_t Read(void* buf, size_t count);
-	std::string AsyncRead() const;
+	std::string AsyncRead();
     ssize_t Write(const void* buf, size_t count);
-	void AsyncWrite(const std::string& content, Task& coro) const;
+	void AsyncWrite(const std::string& content, Task& coro);
 protected:    
 	SocketAddress address;
 };
 
-class BaseServerSocket: public BaseSocket {
+class ServerNonBlockSocket: public NonBlockSocket {
 public:
-	BaseServerSocket(): BaseSocket(AF_INET, SOCK_STREAM) {}
+	ServerNonBlockSocket(): NonBlockSocket(AF_INET, SOCK_STREAM) {}
     void Bind(SocketAddress address);
     void Listen(int backlog = 128);
 
-	std::vector<RWSocket> AsyncAccept() const;
+	std::vector<NonBlockRWSocket> AsyncAccept();
 private:
 	SocketAddress GetAddress() { return address;}
 	SocketAddress address;
 };
 
-
-class ClientSocket: public RWSocket {
+class Socket {
 public:
-    void Connect(SocketAddress address);
-private:
+	Socket(int domain, int type);
+	int GetFd() const;
+    ssize_t Read(void* buf, size_t count);
+    ssize_t Write(const void* buf, size_t count);
+	~Socket();
+protected:
+	void CreateSocket(int domain, int type);
+	int fd;
+};
+
+class ClientSocket: public Socket {
+public:
+	ClientSocket();
+    void Connect(SocketAddress& address);
+	void SendString(const std::string& str);
+	std::string ReceiveString();
 };

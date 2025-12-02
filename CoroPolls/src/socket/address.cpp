@@ -14,11 +14,11 @@
 
 SocketAddress::SocketAddress(const std::string& addr, int port)
 {
-	if (inet_pton(AF_INET, addr.c_str(), &(Addr_.sin_addr)) <= 0)
+	if (inet_pton(AF_INET, addr.c_str(), &(address.sin_addr)) <= 0)
  		throw std::runtime_error("Invalid address: '" + addr + "'");
 
- 	Addr_.sin_port = htons(port);
-	Addr_.sin_family = AF_INET;
+ 	address.sin_port = htons(port);
+	address.sin_family = AF_INET;
 
 }
 
@@ -26,13 +26,13 @@ SocketAddress::SocketAddress(sockaddr* addr)
 {
 	sockaddr_in addr4; 
 	memcpy(&addr4, addr, sizeof(addr4));
-    Addr_ = addr4;
+    address = addr4;
 }
 
 std::string SocketAddress::ToString() const
 {
    char buf[1024];
-   const auto* val = &Addr_;
+   const auto* val = &address;
 
    auto* r = inet_ntop(AF_INET, &val->sin_addr, buf, sizeof(buf));
    if (r) {
@@ -43,5 +43,5 @@ std::string SocketAddress::ToString() const
 }
 
 std::pair<const sockaddr*, int> SocketAddress::RawAddr() const {
-	return {reinterpret_cast<const sockaddr*>(&Addr_), sizeof(sockaddr_in)};
+	return {reinterpret_cast<const sockaddr*>(&address), sizeof(sockaddr_in)};
 }
