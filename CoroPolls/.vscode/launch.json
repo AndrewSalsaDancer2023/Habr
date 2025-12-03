@@ -8,7 +8,7 @@
             "name": "(gdb) Запуск",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/myapp", // Здесь путь к вашей программе
+            "program": "${workspaceFolder}/build/server", // Здесь путь к вашей программе
             "args": [],
             "stopAtEntry": true,
             "cwd": "${workspaceFolder}",

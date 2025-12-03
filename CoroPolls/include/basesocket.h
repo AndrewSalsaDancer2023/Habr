@@ -30,7 +30,7 @@ public:
 	NonBlockRWSocket() : NonBlockSocket(AF_INET, SOCK_STREAM){}
 	NonBlockRWSocket(SocketAddress address, int fd);
     ssize_t Read(void* buf, size_t count);
-	std::string AsyncRead();
+	std::string AsyncRead(Task& coro);
     ssize_t Write(const void* buf, size_t count);
 	void AsyncWrite(const std::string& content, Task& coro);
 protected:    
@@ -43,7 +43,7 @@ public:
     void Bind(SocketAddress address);
     void Listen(int backlog = 128);
 
-	std::vector<NonBlockRWSocket> AsyncAccept();
+	std::vector<NonBlockRWSocket> AsyncAccept(Task& coro);
 private:
 	SocketAddress GetAddress() { return address;}
 	SocketAddress address;

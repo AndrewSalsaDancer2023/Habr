@@ -16,7 +16,8 @@ int port = 8080;
 std::string address{"127.0.0.1"};
 
 std::shared_ptr<EPoller> poller = std::make_shared<EPoller>();
-Scheduler scheduler(poller);
+//Scheduler scheduler(poller);
+std::shared_ptr<Scheduler> scheduler = std::make_shared<Scheduler>(poller);
 
 const std::string echocommand = "echo:";
 const std::string timecommand = "time";
@@ -52,8 +53,7 @@ void client_handler(Task& coro, NonBlockRWSocket& socket)
         poller->AddReadEvent(socket.GetFd(), coro.GetId());
         while(true)
         {
-            coro.Yield();
-            auto input = socket.AsyncRead();
+            auto input = socket.AsyncRead(coro);
             if(input.empty())
                 return;
             
@@ -75,9 +75,9 @@ void client_handler(Task& coro, NonBlockRWSocket& socket)
             socket.AsyncWrite(result, coro);
             poller->RemoveWriteEvent(socket.GetFd(), coro.GetId());
         }
-    } catch (const std::exception& ex) {
-        std::cerr << "Exception: " << ex.what() << std::endl;
-        std::cout << "Finish client handler!" << std::endl;
+    } catch (const std::exception& ex) 
+    {
+        std::cout << "Exception: " << ex.what() << std::endl;
     }
 }
 
@@ -85,7 +85,7 @@ int main(int argc, char **argv)
 {
     try
     {
-        scheduler.CreateTask([](Task& acceptTask)
+        scheduler->CreateTask([](Task& acceptTask)
         {
 	        ServerNonBlockSocket sock;
 	        sock.Bind(SocketAddress(address, port));
@@ -94,22 +94,19 @@ int main(int argc, char **argv)
             poller->AddAcceptEvent(sock.GetFd(), acceptTask.GetId());
 	        while(true) 
             {
-                acceptTask.Yield();
-                for(auto&& clientsocket : sock.AsyncAccept())
+                for(auto&& clientsocket : sock.AsyncAccept(acceptTask))
                 {
-                    scheduler.CreateTask([clientsock = std::move(clientsocket)](Task& client_coro) mutable
+                    scheduler->CreateTask([clientsock = std::move(clientsocket)](Task& client_coro) mutable
                     {
                         client_handler(client_coro, clientsock);
                     });
                 }
             }
         });
-        scheduler.RunTasks();
-    }
-    catch(const std::exception& e)
+        scheduler->RunTasks();
+    } catch(const std::exception& e)
     {
-        std::cerr << e.what() << std::endl;
-        std::cout << "Finish accept handler!" << std::endl;
+        std::cout << e.what() << std::endl;
     }
 	return EXIT_SUCCESS;
 }

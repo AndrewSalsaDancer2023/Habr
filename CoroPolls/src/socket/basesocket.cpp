@@ -82,12 +82,13 @@ void ServerNonBlockSocket::Listen(int backlog)
     }
 }
  
-std::vector<NonBlockRWSocket> ServerNonBlockSocket::AsyncAccept()
+std::vector<NonBlockRWSocket> ServerNonBlockSocket::AsyncAccept(Task& coro)
 {
 	std::vector<NonBlockRWSocket> res;
 	char clientaddr[sizeof(sockaddr_in)];
     socklen_t len = static_cast<socklen_t>(sizeof(sockaddr_in));
 	bool hasData = true;
+	coro.Yield();
     do
     {            
         // Вызываем accept() на неблокирующем сокете
@@ -125,15 +126,17 @@ ssize_t NonBlockRWSocket::Read(void* buf, size_t count)
 	return ::read(*fd_ptr, buf, count); 
 }
 
-std::string NonBlockRWSocket::AsyncRead()
+std::string NonBlockRWSocket::AsyncRead(Task& coro)
 {
+	coro.Yield();
+
 	std::string result;
     char buffer[256];
-    ssize_t bytes_read;
+    // ssize_t bytes_read;
 	bool hasData = true;
 
  	do {
-		bytes_read = ::read(*fd_ptr, buffer, sizeof(buffer));
+		ssize_t bytes_read = ::read(*fd_ptr, buffer, sizeof(buffer));
 		if(bytes_read>0)
 			result.append(buffer, bytes_read);
 		else
@@ -160,6 +163,8 @@ void NonBlockRWSocket::AsyncWrite(const std::string& content, Task& coro)
 	if(content.empty())
 		return;
 
+	coro.Yield();
+
 	size_t total_size = content.size();
 	size_t bytes_sent = 0;
 
@@ -182,12 +187,11 @@ void NonBlockRWSocket::AsyncWrite(const std::string& content, Task& coro)
             	// Мы выходим из обработчика и ждем следующего события EPOLLOUT.
 				coro.Yield();
         	} 
-			else 
+			else
 				throw std::system_error(errno, std::generic_category(), "async write");
     	}
 		remaining_bytes = total_size - bytes_sent;
 	}
-
 }
 
 Socket::Socket(int domain, int type)
