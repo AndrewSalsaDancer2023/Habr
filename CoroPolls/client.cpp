@@ -17,12 +17,13 @@ void handler(ClientSocket &socket)
     while(true) 
     {
         std::cout << "Enter command (time or echo: some text)" << std::endl;
-        std::cin >> user_input; 
+        std::getline(std::cin, user_input);
+        std::cout << "Command:" << user_input << std::endl;
 
         socket.SendString(user_input);
 
         auto res = socket.ReceiveString();
-        std::cout << "Responce from server: " << res;
+        std::cout << "Responce from server: " << res << std::endl;
     }
 }
 

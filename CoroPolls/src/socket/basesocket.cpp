@@ -5,7 +5,11 @@
 #include <utility>
 #include <stdexcept>
 #include <system_error>
+#include <netinet/in.h>
 
+const std::string conn_closed = "connection closed";
+const std::string err_read_socket = "error read data from socket";
+const std::string err_write_socket = "error write data to socket";
 NonBlockSocket::NonBlockSocket(int domain, int type)
 {
 	InitFileDescriptor(CreateSocket(domain, type));
@@ -21,7 +25,7 @@ void NonBlockSocket::InitFileDescriptor(int s)
 	fd_ptr = std::shared_ptr<int>(new int(s), [](int* fd_ptr) 
 	{
             std::cout << "closing fd: " << *fd_ptr << " via shared_ptr deleter." << std::endl;
-            close(*fd_ptr); // Вызов close() при удалении последнего shared_ptr
+            close(*fd_ptr);
             delete fd_ptr;
     });
 }
@@ -92,7 +96,7 @@ std::vector<NonBlockRWSocket> ServerNonBlockSocket::AsyncAccept(Task& coro)
     do
     {            
         // Вызываем accept() на неблокирующем сокете
-        int conn_sock_fd = ::accept(*fd_ptr, reinterpret_cast<sockaddr*>(&clientaddr[0]), &len);
+        int conn_sock_fd = accept(*fd_ptr, reinterpret_cast<sockaddr*>(&clientaddr[0]), &len);
             
         if (conn_sock_fd == -1) 
 		{
@@ -121,11 +125,45 @@ NonBlockRWSocket::NonBlockRWSocket(SocketAddress address, int fd)
 	address = std::move(address);
 }
 
-ssize_t NonBlockRWSocket::Read(void* buf, size_t count)
-{
-	return ::read(*fd_ptr, buf, count); 
+ssize_t NonBlockRWSocket::AsyncReadBytes(Task& coro, void* buffer, size_t length) 
+{   
+    char* buf_ptr = static_cast<char*>(buffer);
+    size_t total_received = 0;
+
+    // coro.Yield();
+    while(total_received < length) 
+    {
+        ssize_t bytes_recvd = read(*fd_ptr, buf_ptr + total_received, length - total_received);
+        
+        if(bytes_recvd <= 0)
+        {
+            if(bytes_recvd == 0)
+                throw std::system_error(errno, std::generic_category(), conn_closed);
+
+            if(errno != EAGAIN && errno != EWOULDBLOCK)
+                throw std::system_error(errno, std::generic_category(), err_read_socket);
+            else
+                coro.Yield();
+        }
+        else
+            total_received += bytes_recvd;
+    }
+    return total_received;
 }
 
+std::string NonBlockRWSocket::AsyncRead(Task& coro)
+{
+    uint32_t length; 
+    ssize_t bytes_read = AsyncReadBytes(coro, &length, sizeof(length));
+   
+    length = ntohl(length);
+    //Теперь используем ту же функцию для чтения ровно length байт данных
+    std::vector<char> buffer(length);
+    AsyncReadBytes(coro, buffer.data(), length);
+
+    return std::string(buffer.data(), length);
+}
+/*
 std::string NonBlockRWSocket::AsyncRead(Task& coro)
 {
 	coro.Yield();
@@ -152,10 +190,28 @@ std::string NonBlockRWSocket::AsyncRead(Task& coro)
 
 	return result;
 }
+*/
 
-ssize_t NonBlockRWSocket::Write(const void* buf, size_t count)
-{
-	return ::write(*fd_ptr, buf, count);
+void NonBlockRWSocket::AsyncWriteBytes(Task& coro, const void* buffer, size_t length) 
+{   
+    const char* buf_ptr = static_cast<const char*>(buffer);
+    size_t total_send = 0;
+
+    // coro.Yield();
+    while(total_send < length) 
+    {
+        ssize_t bytes_sent = write(*fd_ptr, buf_ptr + total_send, length - total_send);
+        
+        if(bytes_sent < 0)
+        {
+            if(errno != EAGAIN && errno != EWOULDBLOCK)
+                throw std::system_error(errno, std::generic_category(), err_write_socket);
+            else
+                coro.Yield();
+        }
+        else
+            total_send += bytes_sent;
+    }
 }
 
 void NonBlockRWSocket::AsyncWrite(const std::string& content, Task& coro)
@@ -163,6 +219,10 @@ void NonBlockRWSocket::AsyncWrite(const std::string& content, Task& coro)
 	if(content.empty())
 		return;
 
+    uint32_t length = htonl(content.size()); // Преобразование в сетевой порядок байтов
+    AsyncWriteBytes(coro, &length, sizeof(length)); 
+    AsyncWriteBytes(coro, content.data(), content.size());
+/*
 	coro.Yield();
 
 	size_t total_size = content.size();
@@ -192,6 +252,7 @@ void NonBlockRWSocket::AsyncWrite(const std::string& content, Task& coro)
     	}
 		remaining_bytes = total_size - bytes_sent;
 	}
+*/        
 }
 
 Socket::Socket(int domain, int type)
@@ -217,37 +278,17 @@ void Socket::CreateSocket(int domain, int type)
     }
 }
 
-ssize_t Socket::Read(void* buf, size_t count)
-{
-	return ::read(fd, buf, count); 
-}
-
-ssize_t Socket::Write(const void* buf, size_t count)
-{
-	return ::write(fd, buf, count);
-}
-
-
 ClientSocket::ClientSocket()
     :Socket(AF_INET, SOCK_STREAM)
 {}
-/*
-void ConnectToServer(int fd, SocketAddress& address)
-{
-    auto [rawaddr, len] = address.RawAddr();
-    if (connect(fd, rawaddr, len) != 0) 
-        throw std::system_error(errno, std::generic_category(), "connect");
-}
-*/
+
 void ClientSocket::Connect(SocketAddress& address)
 {
-/*	address = std::move(address);
-    ConnectToServer(GetFd(), address);*/
 	auto [rawaddr, len] = address.RawAddr();
     if (connect(fd, rawaddr, len) != 0) 
     	throw std::system_error(errno, std::generic_category(), "connect");
 }
-
+/*
 void ClientSocket::SendString(const std::string& str)
 {
     auto res = Write(str.c_str(), str.length());
@@ -259,24 +300,81 @@ void ClientSocket::SendString(const std::string& str)
 
 std::string ClientSocket::ReceiveString()
 {
+    return receive_string_reliable(fd);
+
     char buffer[256];
 	bool hasData = true;
     std::string result;
 
- 	do {
-		ssize_t bytes_read = ::read(fd, buffer, sizeof(buffer));
-		if(bytes_read>0)
-			result.append(buffer, bytes_read);
-		else
-		{
-			hasData = false;
-			if (bytes_read < 0) 
-			{
-				if (errno != EAGAIN && errno != EWOULDBLOCK)
-					throw std::system_error(errno, std::generic_category(), "async read");
-			}
-		}
-    }while(hasData);
-    
+   ssize_t bytes_read = read(fd, buffer, sizeof(buffer));
+   if(bytes_read<0)
+        throw std::system_error(errno, std::generic_category(), "async read");
+   result.append(buffer, bytes_read);
     return result;
+}
+*/
+ssize_t ReadBytes(int sockfd, void* buffer, size_t length) 
+{    
+    char* buf_ptr = static_cast<char*>(buffer);
+    size_t total_received = 0;
+    while (total_received < length) 
+    {
+        ssize_t bytes_recvd = read(sockfd, buf_ptr + total_received, length - total_received);
+        
+        if (bytes_recvd <= 0) 
+            throw std::system_error(errno, std::generic_category(), err_read_socket);
+
+        total_received += bytes_recvd;
+    }
+    return total_received;
+}
+
+std::string ClientSocket::ReceiveString()
+{
+    uint32_t length; 
+    // Используем вспомогательную функцию для чтения ровно 4 байтов
+    ssize_t bytes_read = ReadBytes(fd, &length, sizeof(length));
+
+    length = ntohl(length);
+    std::cout << "received from server:" << length << std::endl;
+    // Теперь используем ту же функцию для чтения ровно length байтов данных
+    std::vector<char> buffer(length);
+    ReadBytes(fd, buffer.data(), length);
+
+    return std::string(buffer.data(), length);
+}
+
+void ClientSocket::SendString(const std::string& data)
+{
+    // Отправляем длину строки (в сетевом порядке байтов)
+    uint32_t length = htonl(data.size()); // Преобразование в сетевой порядок байтов
+    if (write(fd, &length, sizeof(length)) == -1) 
+        throw std::system_error(errno, std::generic_category(), err_write_socket);
+
+    if (write(fd, data.c_str(), data.size()) == -1) 
+        throw std::system_error(errno, std::generic_category(), err_write_socket);
+}
+
+std::string receive_string(int sockfd) 
+{
+    uint32_t length;
+    ssize_t bytes_received = read(sockfd, &length, sizeof(length));
+    
+    if (bytes_received <= 0) {
+        // Обработка ошибки или закрытия соединения
+        return ""; 
+    }
+
+    // Преобразуем длину из сетевого порядка байтов в порядок байтов хост-системы
+    length = ntohl(length);
+
+    // Выделяем буфер для данных и принимаем саму строку
+    std::vector<char> buffer(length);
+    bytes_received = read(sockfd, buffer.data(), length);
+
+    if (bytes_received <= 0) {
+        return "";
+    }
+
+    return std::string(buffer.data(), bytes_received);
 }

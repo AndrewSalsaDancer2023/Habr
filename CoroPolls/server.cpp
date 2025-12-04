@@ -11,12 +11,12 @@
 #include "scheduler.h"
 #include "utils.h"
 
-size_t buffer_size = 512;
+#include <netinet/in.h>
+
 int port = 8080;
 std::string address{"127.0.0.1"};
 
 std::shared_ptr<EPoller> poller = std::make_shared<EPoller>();
-//Scheduler scheduler(poller);
 std::shared_ptr<Scheduler> scheduler = std::make_shared<Scheduler>(poller);
 
 const std::string echocommand = "echo:";
