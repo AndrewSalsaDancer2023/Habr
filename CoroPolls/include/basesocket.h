@@ -29,9 +29,7 @@ class NonBlockRWSocket: public NonBlockSocket {
 public:
 	NonBlockRWSocket() : NonBlockSocket(AF_INET, SOCK_STREAM){}
 	NonBlockRWSocket(SocketAddress address, int fd);
-    // ssize_t Read(void* buf, size_t count);
 	std::string AsyncRead(Task& coro);
-    // ssize_t Write(const void* buf, size_t count);
 	void AsyncWrite(const std::string& content, Task& coro);
 protected:
 	ssize_t AsyncReadBytes(Task& coro, void* buffer, size_t length);
@@ -55,8 +53,6 @@ class Socket {
 public:
 	Socket(int domain, int type);
 	int GetFd() const;
-    // ssize_t Read(void* buf, size_t count);
-    // ssize_t Write(const void* buf, size_t count);
 	~Socket();
 protected:
 	void CreateSocket(int domain, int type);

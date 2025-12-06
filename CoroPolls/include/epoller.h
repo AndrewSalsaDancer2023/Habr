@@ -9,7 +9,7 @@
 const int invalid_handle = -1;
 const int sleep_default = 10;
 
-enum class DescriptorOperations: unsigned char
+enum class DescriptorEvents: unsigned char
 {
   Accept,
   Read,
@@ -19,9 +19,9 @@ enum class DescriptorOperations: unsigned char
 
 struct PollResult
 {
-	int coro_id;
-	DescriptorOperations command;
-    PollResult(int id, DescriptorOperations op) : coro_id(id), command(op) {}
+	uint32_t coro_id;
+	DescriptorEvents event;
+    PollResult(uint32_t id, DescriptorEvents op) : coro_id(id), event(op) {}
 };
 
 class EPoller

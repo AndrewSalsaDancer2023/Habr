@@ -5,16 +5,7 @@
 #include "coroutine.h"
 #include <utility>
 #include <stdexcept>
-/*
-void Scheduler::CreateTask(std::function<void (Task &)>&& func)
-{
-	
-	Task_map.emplace(std::piecewise_construct,
-            		 std::forward_as_tuple(id),
-            		 std::forward_as_tuple(func, id));
-	id++;
-}
-*/
+
 Scheduler::Scheduler(std::shared_ptr<EPoller> plr)
 		  :poller{plr}
 {}
@@ -28,7 +19,7 @@ void Scheduler::ProcessEvents()
 		if(iter == task_map.end())
 			throw std::runtime_error("coro is absent in scheduler map");
 	
-		if(evt.command == DescriptorOperations::Error)
+		if(evt.event == DescriptorEvents::Error)
 		{
 			std::runtime_error specific_error("poller exception");
         	std::exception_ptr exptr = std::make_exception_ptr(specific_error);
@@ -43,23 +34,19 @@ void Scheduler::ProcessEvents()
 void Scheduler::ProcessTasks()
 {
 	for(auto curr_Task = task_map.begin(); curr_Task != task_map.end(); )
+	{
+		if((curr_Task->second.GetStatus() != task_status::Task_RUNNING) && (curr_Task->second.GetStatus() != task_status::Task_CREATED))
 		{
-			if((curr_Task->second.GetStatus() != task_status::Task_RUNNING) && (curr_Task->second.GetStatus() != task_status::Task_CREATED))
-			{
-				curr_Task++;
-				continue;
-			}
-
-			curr_Task->second();
-			if(curr_Task->second.GetStatus() == Task_FINISHED)
-			{
-				curr_Task = task_map.erase(curr_Task);
-			}
-			else
-			{
-				curr_Task++;
-			}
+			curr_Task++;
+			continue;
 		}
+
+		curr_Task->second();
+		if(curr_Task->second.GetStatus() == Task_FINISHED)
+			curr_Task = task_map.erase(curr_Task);
+		else
+			curr_Task++;
+	}
 }
 
 void Scheduler::RunTasks(void)

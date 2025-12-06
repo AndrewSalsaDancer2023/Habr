@@ -10,6 +10,7 @@
 const std::string conn_closed = "connection closed";
 const std::string err_read_socket = "error read data from socket";
 const std::string err_write_socket = "error write data to socket";
+
 NonBlockSocket::NonBlockSocket(int domain, int type)
 {
 	InitFileDescriptor(CreateSocket(domain, type));
@@ -24,9 +25,9 @@ void NonBlockSocket::InitFileDescriptor(int s)
 {
 	fd_ptr = std::shared_ptr<int>(new int(s), [](int* fd_ptr) 
 	{
-            std::cout << "closing fd: " << *fd_ptr << " via shared_ptr deleter." << std::endl;
-            close(*fd_ptr);
-            delete fd_ptr;
+        std::cout << "closing fd: " << *fd_ptr << " via shared_ptr deleter." << std::endl;
+        close(*fd_ptr);
+        delete fd_ptr;
     });
 }
 
@@ -95,7 +96,7 @@ std::vector<NonBlockRWSocket> ServerNonBlockSocket::AsyncAccept(Task& coro)
 	coro.Yield();
     do
     {            
-        // Вызываем accept() на неблокирующем сокете
+        //Вызываем accept() на неблокирующем сокете
         int conn_sock_fd = accept(*fd_ptr, reinterpret_cast<sockaddr*>(&clientaddr[0]), &len);
             
         if (conn_sock_fd == -1) 
@@ -110,8 +111,8 @@ std::vector<NonBlockRWSocket> ServerNonBlockSocket::AsyncAccept(Task& coro)
                 throw std::system_error(errno, std::generic_category(), "async accept");
         }
             
-        // Успешно приняли новое соединение.
-        // conn_sock_fd — это новый сокет для клиента.
+        //Успешно приняли новое соединение.
+        //conn_sock_fd — это новый сокет для клиента.
 		std::cout << "New connection accepted on fd: " << conn_sock_fd << std::endl;
 		res.emplace_back(SocketAddress{reinterpret_cast<sockaddr*>(&clientaddr[0])}, conn_sock_fd);
 	}while(hasData);
@@ -120,7 +121,7 @@ std::vector<NonBlockRWSocket> ServerNonBlockSocket::AsyncAccept(Task& coro)
 }
 
 NonBlockRWSocket::NonBlockRWSocket(SocketAddress address, int fd)
-			:NonBlockSocket(fd)
+			     :NonBlockSocket(fd)
 {
 	address = std::move(address);
 }
@@ -130,7 +131,6 @@ ssize_t NonBlockRWSocket::AsyncReadBytes(Task& coro, void* buffer, size_t length
     char* buf_ptr = static_cast<char*>(buffer);
     size_t total_received = 0;
 
-    // coro.Yield();
     while(total_received < length) 
     {
         ssize_t bytes_recvd = read(*fd_ptr, buf_ptr + total_received, length - total_received);
@@ -163,41 +163,12 @@ std::string NonBlockRWSocket::AsyncRead(Task& coro)
 
     return std::string(buffer.data(), length);
 }
-/*
-std::string NonBlockRWSocket::AsyncRead(Task& coro)
-{
-	coro.Yield();
-
-	std::string result;
-    char buffer[256];
-    // ssize_t bytes_read;
-	bool hasData = true;
-
- 	do {
-		ssize_t bytes_read = ::read(*fd_ptr, buffer, sizeof(buffer));
-		if(bytes_read>0)
-			result.append(buffer, bytes_read);
-		else
-		{
-			hasData = false;
-			if (bytes_read < 0) 
-			{
-				if (errno != EAGAIN && errno != EWOULDBLOCK)
-					throw std::system_error(errno, std::generic_category(), "async read");
-			}
-		}
-	}while(hasData);
-
-	return result;
-}
-*/
 
 void NonBlockRWSocket::AsyncWriteBytes(Task& coro, const void* buffer, size_t length) 
 {   
     const char* buf_ptr = static_cast<const char*>(buffer);
     size_t total_send = 0;
 
-    // coro.Yield();
     while(total_send < length) 
     {
         ssize_t bytes_sent = write(*fd_ptr, buf_ptr + total_send, length - total_send);
@@ -222,37 +193,6 @@ void NonBlockRWSocket::AsyncWrite(const std::string& content, Task& coro)
     uint32_t length = htonl(content.size()); // Преобразование в сетевой порядок байтов
     AsyncWriteBytes(coro, &length, sizeof(length)); 
     AsyncWriteBytes(coro, content.data(), content.size());
-/*
-	coro.Yield();
-
-	size_t total_size = content.size();
-	size_t bytes_sent = 0;
-
-	ssize_t remaining_bytes = total_size;
-	while(remaining_bytes > 0)
-	{
-        // Попытка отправить оставшиеся данные
-		ssize_t sent = write(*fd_ptr, content.data() + bytes_sent, remaining_bytes);
-
-    	if(sent >= 0) 
-		{
-        	// Данные были отправлены успешно (возможно, не все сразу)
-        	bytes_sent += sent;
-			std::cout << "Sent: " <<  sent << "remains: " << total_size - bytes_sent << std::endl;
-        }
-    	else
-		{
-        	if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            	// Буфер сокета заполнился. Это НОРМАЛЬНО.
-            	// Мы выходим из обработчика и ждем следующего события EPOLLOUT.
-				coro.Yield();
-        	} 
-			else
-				throw std::system_error(errno, std::generic_category(), "async write");
-    	}
-		remaining_bytes = total_size - bytes_sent;
-	}
-*/        
 }
 
 Socket::Socket(int domain, int type)
@@ -288,31 +228,7 @@ void ClientSocket::Connect(SocketAddress& address)
     if (connect(fd, rawaddr, len) != 0) 
     	throw std::system_error(errno, std::generic_category(), "connect");
 }
-/*
-void ClientSocket::SendString(const std::string& str)
-{
-    auto res = Write(str.c_str(), str.length());
-    if(res < 0)
-        throw std::system_error(errno, std::generic_category(), "Unable write string to socket!");
-    if(!res) 
-        std::system_error(errno, std::generic_category(), "Server closed connection!");
-}
 
-std::string ClientSocket::ReceiveString()
-{
-    return receive_string_reliable(fd);
-
-    char buffer[256];
-	bool hasData = true;
-    std::string result;
-
-   ssize_t bytes_read = read(fd, buffer, sizeof(buffer));
-   if(bytes_read<0)
-        throw std::system_error(errno, std::generic_category(), "async read");
-   result.append(buffer, bytes_read);
-    return result;
-}
-*/
 ssize_t ReadBytes(int sockfd, void* buffer, size_t length) 
 {    
     char* buf_ptr = static_cast<char*>(buffer);
@@ -354,7 +270,7 @@ void ClientSocket::SendString(const std::string& data)
     if (write(fd, data.c_str(), data.size()) == -1) 
         throw std::system_error(errno, std::generic_category(), err_write_socket);
 }
-
+/*
 std::string receive_string(int sockfd) 
 {
     uint32_t length;
@@ -378,3 +294,4 @@ std::string receive_string(int sockfd)
 
     return std::string(buffer.data(), bytes_received);
 }
+*/    

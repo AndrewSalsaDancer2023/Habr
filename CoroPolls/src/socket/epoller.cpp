@@ -25,7 +25,7 @@ EPoller::EPoller()
 EPoller::~EPoller()
 {
     if(epoll_descriptor != invalid_handle) 
-        ::close(epoll_descriptor);
+        close(epoll_descriptor);
 }
 
 epoll_event CreateReadEvent(int fd, uint32_t coro_id)
@@ -132,7 +132,7 @@ std::vector<PollResult> EPoller::Poll(int timeout_milliseconds)
         {
             // Ошибка на дескрипторе или удаленный конец закрыл соединение
             epoll_ctl(epoll_descriptor, EPOLL_CTL_DEL, fd, NULL); // Удаляем из epoll
-            result.emplace_back(coro_id, DescriptorOperations::Error);
+            result.emplace_back(coro_id, DescriptorEvents::Error);
             continue; // Переходим к следующему событию
         }
         //Проверка на готовность к чтению (самое распространенное событие)
@@ -142,12 +142,12 @@ std::vector<PollResult> EPoller::Poll(int timeout_milliseconds)
             if (fd == accept_descriptor) 
             {
                 //Принять новое соединение (и добавить его в epoll_fd)
-                result.emplace_back(coro_id, DescriptorOperations::Accept);
+                result.emplace_back(coro_id, DescriptorEvents::Accept);
             } 
             else 
             {
                 //Это клиентский сокет, значит можно читать данные
-                result.emplace_back(coro_id, DescriptorOperations::Read);
+                result.emplace_back(coro_id, DescriptorEvents::Read);
             }
         }
         else
@@ -155,7 +155,7 @@ std::vector<PollResult> EPoller::Poll(int timeout_milliseconds)
             //Проверка на готовность к записи
             if (event_flags & EPOLLOUT)
                 //Cокет готов принимать исходящие данные
-                result.emplace_back(coro_id, DescriptorOperations::Write);
+                result.emplace_back(coro_id, DescriptorEvents::Write);
         }
     }
 

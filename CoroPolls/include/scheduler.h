@@ -18,15 +18,7 @@ public:
 	Scheduler(std::shared_ptr<EPoller> plr);
 	
 	template<typename Func>
-void CreateTask(Func&& func);
-/*{
-    task_map.emplace(
-        std::piecewise_construct,
-        std::forward_as_tuple(id),
-        std::forward_as_tuple(std::forward<Func>(func), id) 
-    );
-	id++;
-}*/
+	void CreateTask(Func&& func);
 	void InitScheduler(std::shared_ptr<EPoller> engine);
 	void RunTasks();
 private:
@@ -37,13 +29,11 @@ private:
 	uint32_t id = 1;
 };
 
-	template<typename Func>
+template<typename Func>
 void Scheduler::CreateTask(Func&& func) 
 {
-    task_map.emplace(
-        std::piecewise_construct,
-        std::forward_as_tuple(id),
-        std::forward_as_tuple(std::forward<Func>(func), id) 
-    );
+    task_map.emplace(std::piecewise_construct,
+        			 std::forward_as_tuple(id),
+        			 std::forward_as_tuple(std::forward<Func>(func), id));
 	id++;
 }
