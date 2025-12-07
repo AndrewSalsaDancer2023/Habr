@@ -93,6 +93,7 @@ std::vector<NonBlockRWSocket> ServerNonBlockSocket::AsyncAccept(Task& coro)
 	char clientaddr[sizeof(sockaddr_in)];
     socklen_t len = static_cast<socklen_t>(sizeof(sockaddr_in));
 	bool hasData = true;
+
 	coro.Yield();
     do
     {            
@@ -270,28 +271,3 @@ void ClientSocket::SendString(const std::string& data)
     if (write(fd, data.c_str(), data.size()) == -1) 
         throw std::system_error(errno, std::generic_category(), err_write_socket);
 }
-/*
-std::string receive_string(int sockfd) 
-{
-    uint32_t length;
-    ssize_t bytes_received = read(sockfd, &length, sizeof(length));
-    
-    if (bytes_received <= 0) {
-        // Обработка ошибки или закрытия соединения
-        return ""; 
-    }
-
-    // Преобразуем длину из сетевого порядка байтов в порядок байтов хост-системы
-    length = ntohl(length);
-
-    // Выделяем буфер для данных и принимаем саму строку
-    std::vector<char> buffer(length);
-    bytes_received = read(sockfd, buffer.data(), length);
-
-    if (bytes_received <= 0) {
-        return "";
-    }
-
-    return std::string(buffer.data(), bytes_received);
-}
-*/    

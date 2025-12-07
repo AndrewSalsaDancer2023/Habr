@@ -87,20 +87,27 @@ int main(int argc, char **argv)
     {
         scheduler->CreateTask([](Task& acceptTask)
         {
-	        ServerNonBlockSocket sock;
-	        sock.Bind(SocketAddress(address, port));
-	        sock.Listen();
-        
-            poller->AddAcceptEvent(sock.GetFd(), acceptTask.GetId());
-	        while(true) 
+            try 
             {
-                for(auto&& clientsocket : sock.AsyncAccept(acceptTask))
+	            ServerNonBlockSocket sock;
+	            sock.Bind(SocketAddress(address, port));
+	            sock.Listen();
+        
+                poller->AddAcceptEvent(sock.GetFd(), acceptTask.GetId());
+    	        while(true) 
                 {
-                    scheduler->CreateTask([clientsock = std::move(clientsocket)](Task& client_coro) mutable
+                    for(auto&& clientsocket : sock.AsyncAccept(acceptTask))
                     {
-                        client_handler(client_coro, clientsock);
-                    });
+                        scheduler->CreateTask([clientsock = std::move(clientsocket)](Task& client_coro) mutable
+                        {
+                            client_handler(client_coro, clientsock);
+                        });
+                    }
                 }
+            }
+            catch(const std::exception& e)
+            {
+                std::cout << e.what() << std::endl;        
             }
         });
         scheduler->RunTasks();

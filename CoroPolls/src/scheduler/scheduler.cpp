@@ -24,7 +24,6 @@ void Scheduler::ProcessEvents()
 			std::runtime_error specific_error("poller exception");
         	std::exception_ptr exptr = std::make_exception_ptr(specific_error);
 			iter->second.SetException(exptr);
-			continue;
 		}
 		iter->second.AllowResume();
 	}

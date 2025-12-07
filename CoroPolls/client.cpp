@@ -18,7 +18,6 @@ void handler(ClientSocket &socket)
     {
         std::cout << "Enter command (time or echo: some text)" << std::endl;
         std::getline(std::cin, user_input);
-        std::cout << "Command:" << user_input << std::endl;
 
         socket.SendString(user_input);
 

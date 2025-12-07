@@ -41,10 +41,10 @@ void EPoller::AddEpollEvent(int fd, epoll_event& event)
 {
     if(epoll_ctl(epoll_descriptor, EPOLL_CTL_ADD, fd, &event) < 0)
     {
-        if (errno != EEXIST)
+        // if (errno != EEXIST)
             throw std::system_error(errno, std::generic_category(), epoll_add_desc_error);
-        else
-            throw std::system_error(errno, std::generic_category(), epoll_desc_exists_error);
+        // else
+            // throw std::system_error(errno, std::generic_category(), epoll_desc_exists_error);
     }
 }
 
