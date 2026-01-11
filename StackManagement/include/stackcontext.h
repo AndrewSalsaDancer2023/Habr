@@ -1,0 +1,228 @@
+#include <cstddef>
+#include <cstdlib>
+#include <new>
+
+#include <system_error>
+#include "utils.h"
+
+extern "C" {
+#include <sys/mman.h>
+}
+
+const std::size_t DefaultSize = 16 * 1024;
+
+struct stack_context 
+{
+    std::size_t         size;
+    void                *sp;
+
+    stack_context() 
+    :size(0), sp(0)
+    {}
+
+    stack_context(std::size_t stacksize, void* stackpointer)
+    :size(stacksize), sp(stackpointer)
+    {}
+};
+
+class basic_stack
+{
+public:
+    virtual stack_context allocate() = 0;
+    virtual void deallocate( stack_context & sctx) = 0;
+};
+
+class fixedsize_stack : public basic_stack
+{
+private:
+    std::size_t size_;    
+public:
+    fixedsize_stack( std::size_t size = DefaultSize)
+        :size_( size) {}
+
+    stack_context allocate() override {
+        void * vp = std::malloc( size_);
+        if ( ! vp) {
+            throw std::bad_alloc();
+        }
+
+        // stack_context sctx;
+        // sctx.size = size_;
+        // sctx.sp = static_cast< char * >( vp) + sctx.size;
+
+        // return sctx;
+        return stack_context(size_, static_cast< char * >(vp) + size_);
+    }
+
+    void deallocate( stack_context & sctx) override
+    {
+        void * vp = static_cast< char * >( sctx.sp) - sctx.size;
+        std::free(vp);
+    }
+
+};
+
+/*
+Вызов mmap(0, size_, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_STACK, -1, 0) в Linux используется для выделения новой области виртуальной памяти, которая специально предназначена для использования в качестве стека (обычно для нового потока). 
+Ниже приведена расшифровка каждого параметра:
+0 (addr): Ядро само выбирает подходящий адрес в адресном пространстве процесса для создания маппинга.
+size_ (length): Размер выделяемой области в байтах.
+PROT_READ | PROT_WRITE: Устанавливает права доступа: память можно будет и читать, и записывать, что необходимо для работы стека.
+MAP_PRIVATE: Изменения в этой области памяти будут приватными для процесса. Поскольку маппинг анонимный, это просто означает, что память не разделяется с другими процессами через этот вызов.
+MAP_ANON (или MAP_ANONYMOUS): Указывает, что маппинг не связан ни с каким файлом. Память инициализируется нулями.
+MAP_STACK: Сообщает ядру, что данная область памяти предназначена для стека.
+Примечание: В современных версиях ядра Linux этот флаг часто является "заглушкой" (no-op), но его использование рекомендуется для переносимости (например, на BSD-системы) и для того, чтобы в будущем ядро могло применить специфические оптимизации или проверки для стековых областей.
+-1 (fd): Дескриптор файла. Для анонимного маппинга (MAP_ANON) он должен быть равен -1.
+0 (offset): Смещение в файле. Для анонимных маппингов игнорируется или должно быть равно 0. 
+
+*/
+class protected_stack: public basic_stack
+{ 
+private:
+    std::size_t size_;    
+public:    
+
+protected_stack( std::size_t size = DefaultSize ):
+        size_( size) {
+    }
+
+    stack_context allocate() override 
+    {
+        long page_size = get_page_size();
+        if(page_size == -1)
+            throw std::logic_error("impossible to get page size");
+        // calculate how many pages are required
+        const std::size_t pages = (size_ + page_size - 1) / page_size;
+        // add one page at bottom that will be used as guard-page
+        const std::size_t size__ = ( pages + 1) * page_size;
+
+        void * vp = ::mmap( 0, size__, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+
+        if ( MAP_FAILED == vp) throw std::bad_alloc();
+
+        // conforming to POSIX.1-2001
+        const int result = ::mprotect( vp, page_size, PROT_NONE);
+        if(result == -1)
+            throw std::system_error(errno, std::generic_category());
+        // stack_context sctx;
+        // sctx.size = size__;
+        // sctx.sp = static_cast< char * >( vp) + sctx.size;
+
+        // return sctx;
+        return stack_context(size_, static_cast< char * >(vp) + size_);
+    }
+
+    void deallocate( stack_context & sctx) override 
+    {
+        if(!sctx.sp)
+            throw std::logic_error("sctx.sp schoudn't be null");
+
+        void * vp = static_cast< char * >( sctx.sp) - sctx.size;
+        // conform to POSIX.4 (POSIX.1b-1993, _POSIX_C_SOURCE=199309L)
+        ::munmap( vp, sctx.size);
+    }
+};
+/*
+class basic_fixedsize_stack 
+{
+private:
+    std::size_t     size_;
+
+public:
+    basic_fixedsize_stack( std::size_t size = DefaultSize)
+        :size_( size) {}
+
+    stack_context allocate() 
+    {
+
+    void * vp = ::mmap( 0, size_, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_STACK, -1, 0);
+    if ( vp == MAP_FAILED) {
+        throw std::bad_alloc();
+    }
+
+        stack_context sctx;
+        sctx.size = size_;
+        sctx.sp = static_cast< char * >(vp) + sctx.size;
+
+        return sctx;
+    }
+
+    void deallocate( stack_context & sctx) {
+        void * vp = static_cast< char * >( sctx.sp) - sctx.size;
+        ::munmap( vp, sctx.size);
+    }
+};
+*/
+/*
+Чтобы превратить обычный маппинг в безопасный стек, нужно добавить guard page (защитную страницу). 
+Это пустая страница памяти в самом конце (дне) стека, доступ к которой запрещен. 
+Если стек переполнится и программа попытается записать данные в эту область, ядро немедленно пришлет 
+сигнал SIGSEGV (Segmentation Fault), что позволит остановить программу до того, как она повредит чужие
+ данные. Поскольку на большинстве архитектур (включая x86_64) стек растет вниз 
+ (от больших адресов к меньшим), защитная страница должна находиться по самому низкому адресу вашего 
+ маппинга
+
+Пошаговая реализация с mprotect
+Для этого используется системный вызов mprotect, который меняет права доступа к уже выделенной памяти. 
+Выделите память: Сначала выделите область нужного размера с помощью mmap.
+Установите защиту: Вызовите mprotect для первой страницы этого блока, установив флаг PROT_NONE (запрет на чтение, запись и исполнение)
+
+
+#include <sys/mman.h>
+
+#include <iostream>
+
+void setup_stack_with_guard(size_t stack_size) 
+{
+    // 1. Получаем размер страницы системы (обычно 4096 байт)
+    size_t page_size = sysconf(_SC_PAGESIZE);
+    
+    // 2. Выделяем память под стек + 1 страницу для защиты
+    size_t total_size = stack_size + page_size;
+    void* addr = mmap(NULL, total_size, PROT_READ | PROT_WRITE, 
+                      MAP_PRIVATE | MAP_ANON | MAP_STACK, -1, 0);
+
+    if (addr == MAP_FAILED) {
+        perror("mmap");
+        return;
+    }
+
+    // 3. Делаем первую страницу (самый низ стека) недоступной
+    // Именно сюда «врежется» стек при переполнении
+    if (mprotect(addr, page_size, PROT_NONE) == -1) {
+        perror("mprotect");
+        return;
+    }
+
+    // Теперь полезный стек начинается с (addr + page_size)
+    // Его размер — stack_size.
+    std::cout << "Стек готов. Guard page по адресу: " << addr << std::endl;
+}
+Важные нюансы
+Выравнивание: Параметр addr в mprotect обязательно должен быть выровнен по границе страницы. mmap гарантирует это автоматически для начала выделенного блока.
+Переносимость: Если вы используете pthread_create, библиотека glibc часто делает это за вас автоматически. Размер такой защиты можно настроить через pthread_attr_setguardsize().
+Stack Clash: Одной страницы защиты (4 КБ) может быть недостаточно, если функция выделяет на стеке очень большой массив (например, char buf[8192]) — программа может просто "перепрыгнуть" защитную страницу и начать писать в память за ней. Для защиты от таких атак современные компиляторы используют опцию -fstack-clash-protection.
+*/
+
+/*
+Использование mmap вместо malloc для выделения стека обусловлено фундаментальными различиями в том, как эти механизмы управляют памятью и взаимодействуют с ядром Linux.
+Вот основные причины:
+1. Возможность использования mprotect (Защита)
+Как мы обсуждали ранее, для создания guard page (защитной страницы) необходимо изменить права доступа к конкретной странице памяти на PROT_NONE.
+mmap гарантирует, что выделенная память будет выровнена по границе страницы (page-aligned). Это обязательное условие для работы mprotect.
+malloc выделяет память из «кучи» (heap) и часто возвращает произвольные адреса внутри страниц. Вы не можете запретить доступ к части памяти, выделенной через malloc, не затронув соседние данные, которые могут принадлежать другим объектам программы.
+2. Избегание фрагментации кучи
+Стеки обычно имеют большой размер (от 2 МБ и выше).
+Если выделять такие блоки через malloc, это создает огромную нагрузку на аллокатор кучи.
+При освобождении стека, выделенного через mmap, память немедленно и полностью возвращается операционной системе (munmap). malloc же может удерживать память в куче «про запас», что ведет к неэффективному использованию ОЗУ в многопоточных приложениях.
+3. Флаги управления (MAP_STACK)
+Вызов mmap позволяет передать ядру специальные флаги, такие как MAP_STACK. Хотя в текущих версиях Linux он в основном служит подсказкой, в других UNIX-подобных системах (например, OpenBSD) или в будущих версиях ядра это может включать:
+Специфические оптимизации кэширования.
+Особую обработку при расширении стека.
+Дополнительные проверки безопасности на уровне процессора.
+4. Изоляция и безопасность
+malloc управляет памятью внутри процесса (в user-space), используя сложные структуры данных (списки свободных блоков и т.д.).
+Если стек (который часто подвержен атакам через переполнение буфера) находится в куче, злоумышленнику проще повредить метаданные самого аллокатора malloc, что приведет к полному захвату контроля над процессом.
+Память от mmap изолирована от основной кучи, что делает эксплуатацию уязвимостей более сложной.
+
+*/
