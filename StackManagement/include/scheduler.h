@@ -15,7 +15,7 @@
 class Scheduler
 {
 public:
-	Scheduler(std::shared_ptr<EPoller> plr);
+	Scheduler(std::shared_ptr<EPoller> plr, std::shared_ptr<basic_stack> stck);
 	
 	template<typename Func>
 	void CreateTask(Func&& func);
@@ -26,6 +26,7 @@ private:
 	void ProcessTasks();
 	std::unordered_map<uint32_t, Task> task_map;
 	std::shared_ptr<EPoller> poller;
+	std::shared_ptr<basic_stack> stack;
 	uint32_t id = 1;
 };
 
@@ -34,6 +35,6 @@ void Scheduler::CreateTask(Func&& func)
 {
     task_map.emplace(std::piecewise_construct,
         			 std::forward_as_tuple(id),
-        			 std::forward_as_tuple(std::forward<Func>(func), id));
+        			 std::forward_as_tuple(std::forward<Func>(func), id, stack));
 	id++;
 }

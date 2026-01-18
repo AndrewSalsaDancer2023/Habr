@@ -7,20 +7,11 @@
 #include <stdexcept>
 #include <signal.h>
 
-void segfault_handler(int signum);
 
-Scheduler::Scheduler(std::shared_ptr<EPoller> plr)
-		  :poller{plr}
+Scheduler::Scheduler(std::shared_ptr<EPoller> plr, std::shared_ptr<basic_stack> stck)
+		  :poller{plr},
+		   stack{stck}
 {
-	struct sigaction sa;
-	sa.sa_handler = segfault_handler; // Указываем нашу функцию-обработчик
-    sigemptyset(&sa.sa_mask);         // Очищаем маску сигналов (не блокируем другие сигналы)
-    sa.sa_flags = SA_RESTART;         // SA_RESTART не используется для SIGSEGV, но полезно для других сигналов (перезапуска прерванных системных вызовов)
-
-    // Регистрируем наш обработчик для SIGSEGV
-    if (sigaction(SIGSEGV, &sa, NULL) == -1) {
-        perror("Ошибка регистрации обработчика");
-    }
 }
 
 void Scheduler::ProcessEvents()
@@ -80,12 +71,4 @@ void Scheduler::RunTasks(void)
         }
 	}
 	std::cout << "Finished RunTasks!" << std::endl;
-}
-
-void segfault_handler(int signum) 
-{
-	if(signum != SIGSEGV)
-		return;
-	//delete coroutine
-    // exit(EXIT_FAILURE); // Корректно завершаем программу
 }

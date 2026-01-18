@@ -21,8 +21,10 @@ const size_t DefaultStackSize = 16384;
 class Task
 {
 public:
-    Task(std::function<void (Task &)> func_arg, uint32_t cor_id, size_t stack_size = DefaultStackSize)
-        :stack{std::make_unique<fixedsize_stack>(stack_size)},//stack{new unsigned char[stack_size]}, 
+    // Task(std::function<void (Task &)> func_arg, uint32_t cor_id, size_t stack_size = DefaultStackSize)
+        // :stack{std::make_shared<fixedsize_stack>(stack_size)},
+    Task(std::function<void (Task &)> func_arg, uint32_t cor_id, std::shared_ptr<basic_stack> stck, size_t stack_size = DefaultStackSize)
+        :stack{stck},
          func{func_arg}, 
          id{cor_id}
     {
@@ -30,7 +32,7 @@ public:
         callee.uc_link = &caller;
         // callee.uc_stack.ss_size = stack_size;
         // callee.uc_stack.ss_sp = stack.get();
-        auto context = stack->allocate();
+        auto context = stack->allocate(stack_size);
         callee.uc_stack.ss_size = context.size;
         callee.uc_stack.ss_sp = context.sp;
         makecontext(&callee, reinterpret_cast<void (*)()>(&TaskCall), 1, this);
@@ -106,7 +108,7 @@ private:
     ucontext_t caller;
     ucontext_t callee;
     // std::unique_ptr<unsigned char[]> stack;
-    std::unique_ptr<basic_stack> stack;
+    std::shared_ptr<basic_stack> stack;
     std::function<void (Task &)> func;
     
     uint32_t id = 0;

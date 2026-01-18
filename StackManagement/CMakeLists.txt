@@ -8,6 +8,7 @@ list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/socket/address.cpp)
 list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/socket/basesocket.cpp)
 list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/socket/epoller.cpp)
 list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/scheduler/scheduler.cpp)
+list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/stackcontext.cpp)
 
 # Добавляем исполняемый файл myapp с точкой входа main.c
 add_executable(server server.cpp ${SOURCES})

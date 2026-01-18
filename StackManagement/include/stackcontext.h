@@ -1,3 +1,4 @@
+#pragma once
 #include <cstddef>
 #include <cstdlib>
 #include <new>
@@ -8,8 +9,6 @@
 extern "C" {
 #include <sys/mman.h>
 }
-
-const std::size_t DefaultSize = 16 * 1024;
 
 struct stack_context 
 {
@@ -28,38 +27,21 @@ struct stack_context
 class basic_stack
 {
 public:
-    virtual stack_context allocate() = 0;
+    virtual stack_context allocate(std::size_t size) = 0;
     virtual void deallocate( stack_context & sctx) = 0;
 };
 
 class fixedsize_stack : public basic_stack
 {
-private:
-    std::size_t size_;    
 public:
-    fixedsize_stack( std::size_t size = DefaultSize)
-        :size_( size) {}
+    stack_context allocate(std::size_t size) override;
+    void deallocate( stack_context & sctx) override;
+};
 
-    stack_context allocate() override {
-        void * vp = std::malloc( size_);
-        if ( ! vp) {
-            throw std::bad_alloc();
-        }
-
-        // stack_context sctx;
-        // sctx.size = size_;
-        // sctx.sp = static_cast< char * >( vp) + sctx.size;
-
-        // return sctx;
-        return stack_context(size_, static_cast< char * >(vp) + size_);
-    }
-
-    void deallocate( stack_context & sctx) override
-    {
-        void * vp = static_cast< char * >( sctx.sp) - sctx.size;
-        std::free(vp);
-    }
-
+class protected_stack: public basic_stack
+{ 
+    stack_context allocate(std::size_t size) override;
+    void deallocate(stack_context& sctx) override;
 };
 
 /*
@@ -76,52 +58,7 @@ MAP_STACK: Сообщает ядру, что данная область пам�
 0 (offset): Смещение в файле. Для анонимных маппингов игнорируется или должно быть равно 0. 
 
 */
-class protected_stack: public basic_stack
-{ 
-private:
-    std::size_t size_;    
-public:    
 
-protected_stack( std::size_t size = DefaultSize ):
-        size_( size) {
-    }
-
-    stack_context allocate() override 
-    {
-        long page_size = get_page_size();
-        if(page_size == -1)
-            throw std::logic_error("impossible to get page size");
-        // calculate how many pages are required
-        const std::size_t pages = (size_ + page_size - 1) / page_size;
-        // add one page at bottom that will be used as guard-page
-        const std::size_t size__ = ( pages + 1) * page_size;
-
-        void * vp = ::mmap( 0, size__, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
-
-        if ( MAP_FAILED == vp) throw std::bad_alloc();
-
-        // conforming to POSIX.1-2001
-        const int result = ::mprotect( vp, page_size, PROT_NONE);
-        if(result == -1)
-            throw std::system_error(errno, std::generic_category());
-        // stack_context sctx;
-        // sctx.size = size__;
-        // sctx.sp = static_cast< char * >( vp) + sctx.size;
-
-        // return sctx;
-        return stack_context(size_, static_cast< char * >(vp) + size_);
-    }
-
-    void deallocate( stack_context & sctx) override 
-    {
-        if(!sctx.sp)
-            throw std::logic_error("sctx.sp schoudn't be null");
-
-        void * vp = static_cast< char * >( sctx.sp) - sctx.size;
-        // conform to POSIX.4 (POSIX.1b-1993, _POSIX_C_SOURCE=199309L)
-        ::munmap( vp, sctx.size);
-    }
-};
 /*
 class basic_fixedsize_stack 
 {
