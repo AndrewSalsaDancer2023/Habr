@@ -1,0 +1,74 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include "tasklist.h"
+#include <ucontext.h>
+#include "stackcontext.h"
+
+#if defined(CORO_USE_VALGRIND)
+# include <valgrind/valgrind.h>
+#endif
+
+void scheduler_free_current_task(void)
+{
+	remove_task_tail(&scheduler_data.head, scheduler_data.current, &scheduler_data.tail);
+	delete_task_list_item(&scheduler_data.current);
+}
+
+void init_scheduler(void)
+{
+	scheduler_data.current = scheduler_data.head = scheduler_data.tail = NULL;
+}
+
+void task_call(void)
+{
+	scheduler_data.current->task->func(scheduler_data.current->task->arg);
+	scheduler_data.current->task->status = TASK_FINISHED;
+}
+
+//void init_task_stack(struct task* task, int stack_size)
+void init_task_stack(struct task* task, struct stack_context stack)
+{
+	// task->stack = allocate_fixedsize_stack(stack_size, 0xDEADBEEF);
+	task->stack = stack;
+
+    if(!task->stack.top)
+	{
+		puts(memory_alloc_error_msg);
+        exit(EXIT_FAILURE);
+	}
+
+	if (getcontext(&task->continuation) == -1)
+		handle_context_error("getcontext");
+
+#if defined(CORO_USE_VALGRIND)
+    task->valgrind_id = VALGRIND_STACK_REGISTER (task->stack.top , task->stack.top + task->stack.size);
+#endif
+
+	task->continuation.uc_stack.ss_sp = task->stack.top;
+    task->continuation.uc_stack.ss_size = stack.size;
+  	task->continuation.uc_link = &scheduler_data.continuation;
+
+	makecontext(&task->continuation, (void (*)()) task_call, 0);
+}
+
+void task_yield(void)
+{
+	if (swapcontext(&scheduler_data.current->task->continuation, &scheduler_data.continuation) == -1)
+    	handle_context_error("swapcontext");
+}
+
+void run_tasks(void (*get_stat_func)(unsigned int task_id))
+{
+	struct task *next = NULL;
+
+	while(next = choose_task())
+	{
+		if (swapcontext(&scheduler_data.continuation, &next->continuation) == -1)
+            handle_context_error("swapcontext");
+		// if(get_stat_func)
+			// get_stat_func(next->id);
+		if(next->status == TASK_FINISHED)
+			scheduler_free_current_task();
+	}
+	printf("Finished run_tasks!\n");
+}

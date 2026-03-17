@@ -1,18 +1,41 @@
+# Минимальная версия CMake
 cmake_minimum_required(VERSION 3.10)
-project(MyProject VERSION 1.0 LANGUAGES CXX)
+# Имя вашего проекта
+project(MyProject VERSION 1.0 LANGUAGES C CXX)
+enable_language(ASM)
+# Включаем каталог с заголовочными файлами
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(include)
 
+set(CORO_USE_VALGRIND ON)
 
-file(GLOB SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/utils.cpp)
-list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/socket/address.cpp)
-list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/socket/basesocket.cpp)
-list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/socket/epoller.cpp)
-list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/scheduler/scheduler.cpp)
-list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/stackcontext.cpp)
+#set(USE_SETJMP ON)
+set(USE_CONTEXT ON)
+#set(USE_ASMCONTEXT ON)
+configure_file(config.h.in config.h)
+
+
+file(GLOB SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c)
+set(ASM_SOURCE_FILES)
+
+if(DEFINED USE_SETJMP)
+   list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/Jump/scheduler.c)
+   list(APPEND ASM_SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/Asm/jmp_functions.s)
+elseif(DEFINED USE_CONTEXT)
+   list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/Context/scheduler.c)
+   list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/observer.cpp)
+#   list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/stackcontext.c)
+   #list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/utils.c)
+      list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/stat.c)
+elseif(DEFINED USE_ASMCONTEXT)
+   list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/AsmContext/scheduler.c)
+   list(APPEND ASM_SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/Asm/asm_function.s)
+else()
+   message(FATAL_ERROR "Не задани ни одна из опций USE_SETJMP, USE_CONTEXT. Заверщение сборки")
+endif()
 
 # Добавляем исполняемый файл myapp с точкой входа main.c
-add_executable(server server.cpp ${SOURCES})
-add_executable(client client.cpp ${SOURCES})
+add_executable(myapp main.c ${SOURCES} ${ASM_SOURCE_FILES})
 
 # Опционально: добавляем флаги компилятора (-Wall, -Wextra etc.)
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11")
